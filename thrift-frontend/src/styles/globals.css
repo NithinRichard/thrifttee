@@ -1,0 +1,94 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  /* Custom CSS Variables */
+  :root {
+    --vintage-color: #8B4513;
+    --vintage-light: #D2B48C;
+    --vintage-dark: #654321;
+  }
+
+  /* Custom Font */
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&display=swap');
+
+  /* Custom Classes */
+  .font-vintage {
+    font-family: 'Playfair Display', serif;
+  }
+
+  .text-vintage-600 {
+    color: var(--vintage-color);
+  }
+
+  .bg-vintage-600 {
+    background-color: var(--vintage-color);
+  }
+
+  .bg-gradient-vintage {
+    background: linear-gradient(135deg, var(--vintage-light) 0%, var(--vintage-color) 100%);
+  }
+
+  /* Button Styles */
+  .btn-primary {
+    @apply bg-vintage-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-vintage-700 transition-colors duration-300;
+  }
+
+  .btn-secondary {
+    @apply bg-gray-200 text-gray-800 px-6 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors duration-300;
+  }
+
+  /* Input Styles */
+  .input-field {
+    @apply border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-vintage-600 focus:border-transparent;
+  }
+}
+
+/* Loading Spinner */
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid var(--vintage-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--vintage-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--vintage-dark);
+}
+
+/* Responsive Images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Focus Styles */
+button:focus,
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--vintage-color), 0 0 0 4px rgba(139, 69, 19, 0.2);
+}
