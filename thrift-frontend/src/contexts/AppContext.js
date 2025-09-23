@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import apiService from '../services/api';
 
 // Initial state
@@ -93,10 +93,26 @@ const appReducer = (state, action) => {
       return { ...state, filters: action.payload };
     
     case actionTypes.SET_CART:
-      const cart = action.payload;
-      const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
-      const cartTotal = cart.reduce((total, item) => total + (item.price * item.quantity), 0);
-      return { ...state, cart, cartCount, cartTotal };
+      // Normalize cart payload shape from API
+      {
+        const raw = action.payload;
+        const items = Array.isArray(raw)
+          ? raw
+          : (raw && Array.isArray(raw.items) ? raw.items : []);
+        const cart = items.map((it) => {
+          const unitPrice = typeof it.price === 'number'
+            ? it.price
+            : (it.tshirt?.price ?? it.product?.price ?? 0);
+          return {
+            ...it,
+            price: unitPrice,
+            quantity: it.quantity ?? 1,
+          };
+        });
+        const cartCount = cart.reduce((total, item) => total + (item.quantity || 0), 0);
+        const cartTotal = cart.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0);
+        return { ...state, cart, cartCount, cartTotal };
+      }
     
     case actionTypes.ADD_TO_CART:
       const newItem = action.payload;
@@ -298,8 +314,8 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: actionTypes.LOGOUT_USER });
   }, []);
 
-  // Combine all actions into a single object
-  const actions = {
+  // Combine all actions into a single stable object
+  const actions = useMemo(() => ({
     setLoading,
     setError,
     clearError,
@@ -314,7 +330,22 @@ export const AppProvider = ({ children }) => {
     clearCart,
     login,
     logout,
-  };
+  }), [
+    setLoading,
+    setError,
+    clearError,
+    setProducts,
+    setFeaturedProducts,
+    setCurrentProduct,
+    setSearchQuery,
+    setFilters,
+    addToCart,
+    updateCartItem,
+    removeFromCart,
+    clearCart,
+    login,
+    logout,
+  ]);
 
   return (
     <AppContext.Provider value={{ state, actions }}>

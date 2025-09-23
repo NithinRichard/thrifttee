@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
+import { formatINR } from '../utils/currency';
 
 const CheckoutPage = () => {
   const { state, actions } = useApp();
@@ -13,7 +14,7 @@ const CheckoutPage = () => {
     (total, item) => total + item.price * item.quantity,
     0
   );
-  const shippingCost = 5.0;
+  const shippingCost = 0;
   const totalCost = cartSubtotal + shippingCost;
 
   const onSubmit = async (data) => {
@@ -119,7 +120,7 @@ const CheckoutPage = () => {
                     className="btn-primary w-full text-lg py-3"
                     disabled={state.loading}
                   >
-                    {state.loading ? 'Placing Order...' : `Pay $${totalCost.toFixed(2)}`}
+                    {state.loading ? 'Placing Order...' : `Pay ${formatINR(totalCost)}`}
                   </button>
                 </div>
               </form>
@@ -138,7 +139,7 @@ const CheckoutPage = () => {
                       <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
                     </div>
                     <div className="font-bold text-gray-800">
-                      ${(item.price * item.quantity).toFixed(2)}
+                      {formatINR(item.price * item.quantity)}
                     </div>
                   </div>
                 ))}
@@ -148,20 +149,20 @@ const CheckoutPage = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal</span>
                   <span className="font-bold text-gray-800">
-                    ${cartSubtotal.toFixed(2)}
+                    {formatINR(cartSubtotal)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Shipping</span>
                   <span className="font-bold text-gray-800">
-                    ${shippingCost.toFixed(2)}
+                    {formatINR(shippingCost)}
                   </span>
                 </div>
                 <div className="border-t border-gray-200 my-4"></div>
                 <div className="flex justify-between text-xl">
                   <span className="font-bold text-gray-900">Total</span>
                   <span className="font-bold text-vintage-600">
-                    ${totalCost.toFixed(2)}
+                    {formatINR(totalCost)}
                   </span>
                 </div>
               </div>

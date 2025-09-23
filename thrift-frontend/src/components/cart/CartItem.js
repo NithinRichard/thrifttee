@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { formatINR } from '../../utils/currency';
 
 const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
   return (
@@ -19,7 +20,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
         >
           {item.title}
         </Link>
-        <div className="text-gray-600">${item.price.toFixed(2)}</div>
+        <div className="text-gray-600">{formatINR(item.price)}</div>
         <div className="text-sm text-gray-500">
           Size: {item.size || 'N/A'} | Condition: {item.condition || 'N/A'}
         </div>

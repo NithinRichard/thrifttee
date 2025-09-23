@@ -7,7 +7,7 @@ import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 
 const LoginPage = () => {
-  const { actions } = useApp();
+  const { state, actions } = useApp();
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors } } = useForm();
 
@@ -15,7 +15,8 @@ const LoginPage = () => {
     try {
       actions.setLoading(true);
       const response = await apiService.login(data);
-      actions.login(response.user, response.access_token);
+      const token = response.token || response.access_token || localStorage.getItem('authToken');
+      actions.login(response.user, token);
       navigate('/profile');
     } catch (error) {
       actions.setError('Invalid credentials. Please try again.');

@@ -16,7 +16,8 @@ api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('authToken');
     if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+      // Django REST Framework TokenAuthentication expects "Token <key>"
+      config.headers.Authorization = `Token ${token}`;
     }
     return config;
   },
@@ -130,7 +131,14 @@ class ApiService {
   // Authentication
   async login(credentials) {
     const response = await api.post('/users/login/', credentials);
-    return response.data;
+    const data = response.data;
+    // Persist DRF token from backend response
+    if (data?.token) {
+      localStorage.setItem('authToken', data.token);
+    } else if (data?.access_token) {
+      localStorage.setItem('authToken', data.access_token);
+    }
+    return data;
   }
 
   async register(userData) {

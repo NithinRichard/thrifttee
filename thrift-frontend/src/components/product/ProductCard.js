@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../../contexts/AppContext';
+import { formatINR } from '../../utils/currency';
 
 const ProductCard = ({ product }) => {
   const { actions } = useApp();
@@ -41,7 +42,7 @@ const ProductCard = ({ product }) => {
       <Link to={`/products/${product.slug}`}>
         <div className="relative overflow-hidden">
           <img
-            src={product.image || 'https://via.placeholder.com/400x400'}
+            src={(product.primary_image || (product.all_images && product.all_images[0])) || 'https://via.placeholder.com/400x400'}
             alt={product.title}
             className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
           />
@@ -84,11 +85,11 @@ const ProductCard = ({ product }) => {
 
           <div className="flex justify-between items-center mb-3">
             <div className="text-2xl font-bold text-vintage-600">
-              ${product.price}
+              {formatINR(product.price)}
             </div>
             {product.original_price && (
               <div className="text-sm text-gray-500 line-through">
-                ${product.original_price}
+                {formatINR(product.original_price)}
               </div>
             )}
           </div>

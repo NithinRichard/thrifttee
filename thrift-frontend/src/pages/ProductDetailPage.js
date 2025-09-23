@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 import ProductCard from '../components/product/ProductCard';
+import { formatINR } from '../utils/currency';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -21,11 +22,12 @@ const ProductDetailPage = () => {
 
         if (productData && productData.category) {
           const relatedData = await apiService.getProducts({
-            category: productData.category.id,
-            exclude: productData.id,
-            limit: 4,
+            category: productData.category.slug,
           });
-          setRelatedProducts(relatedData.results || relatedData);
+          const relatedList = (relatedData.results || relatedData)
+            .filter((p) => p.id !== productData.id)
+            .slice(0, 4);
+          setRelatedProducts(relatedList);
         }
       } catch (error) {
         actions.setError('Failed to load product details');
@@ -36,7 +38,7 @@ const ProductDetailPage = () => {
 
     loadProductData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [slug, actions]);
+  }, [slug]);
 
   const handleAddToCart = () => {
     if (product) {
@@ -91,7 +93,7 @@ const ProductDetailPage = () => {
             >
               <div className="bg-white p-4 rounded-lg shadow-lg">
                 <img
-                  src={product.image || 'https://via.placeholder.com/600x600'}
+                  src={(product.all_images && product.all_images[0]) || product.primary_image || 'https://via.placeholder.com/600x600'}
                   alt={product.title}
                   className="w-full h-auto object-cover rounded-lg"
                 />
@@ -108,7 +110,7 @@ const ProductDetailPage = () => {
                 {product.title}
               </h1>
               <div className="text-3xl font-bold text-vintage-600 mb-6">
-                ${product.price}
+                {formatINR(product.price)}
               </div>
               <p className="text-gray-700 text-lg mb-8">
                 {product.description}

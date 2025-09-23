@@ -7,7 +7,7 @@ import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 
 const RegisterPage = () => {
-  const { actions } = useApp();
+  const { state, actions } = useApp();
   const navigate = useNavigate();
   const { register, handleSubmit, formState: { errors }, watch } = useForm();
   const password = watch('password');
