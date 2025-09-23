@@ -57,18 +57,18 @@ const CartPage = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Subtotal</span>
                     <span className="font-bold text-gray-800">
-                      ${cartSubtotal.toFixed(2)}
+                    ₹{cartSubtotal.toFixed(2)}
                     </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Shipping</span>
-                    <span className="font-bold text-gray-800">$5.00</span>
+                    <span className="font-bold text-gray-800">₹5.00</span>
                   </div>
                   <div className="border-t border-gray-200 my-4"></div>
                   <div className="flex justify-between text-xl">
                     <span className="font-bold text-gray-900">Total</span>
                     <span className="font-bold text-vintage-600">
-                      ${(cartSubtotal + 5.0).toFixed(2)}
+                    ₹{(cartSubtotal + 5.0).toFixed(2)}
                     </span>
                   </div>
                 </div>

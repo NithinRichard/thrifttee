@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from decimal import Decimal, InvalidOperation
 from .models import Order, OrderItem
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -38,6 +39,16 @@ class CreateOrderSerializer(serializers.ModelSerializer):
     # Order items
     order_items = serializers.JSONField(required=True)
 
+    # Optional transaction details from gateway
+    transaction_details = serializers.JSONField(required=False, default=dict)
+
+    # Optional flat shipping address string
+    shipping_address = serializers.CharField(required=False, allow_blank=True)
+
+    # Override payment_status to bypass model ChoiceField validation so we can
+    # normalize friendly frontend statuses like "success" -> "completed" first
+    payment_status = serializers.CharField(required=False, allow_blank=True)
+
     # Pricing information (with defaults)
     subtotal = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
     tax_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
@@ -54,8 +65,54 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             'customer_info', 'order_items', 'payment_method',
             'payment_token', 'payment_status', 'transaction_details',
             'currency', 'notes', 'subtotal', 'tax_amount',
-            'shipping_amount', 'total_amount'
+            'shipping_amount', 'total_amount', 'shipping_address'
         ]
+
+    def validate(self, attrs):
+        """Normalize incoming payment status and monetary fields."""
+        # Normalize payment_status values from frontend (e.g., 'success' -> 'completed')
+        status = attrs.get('payment_status')
+        if isinstance(status, str):
+            normalized = status.lower().strip()
+            mapping = {
+                'success': 'completed',
+                'succeeded': 'completed',
+                'paid': 'completed',
+                'complete': 'completed',
+            }
+            attrs['payment_status'] = mapping.get(normalized, normalized)
+
+        # Normalize amounts to 2 decimal places and within max_digits
+        def to_amount(value, fallback=None):
+            if value in (None, ''):
+                return fallback
+            try:
+                amt = Decimal(str(value))
+                # Quantize to 2 dp
+                return amt.quantize(Decimal('0.01'))
+            except (InvalidOperation, ValueError):
+                return fallback
+
+        subtotal = to_amount(attrs.get('subtotal'), Decimal('0.00'))
+        tax_amount = to_amount(attrs.get('tax_amount'))
+        shipping_amount = to_amount(attrs.get('shipping_amount'))
+
+        # Recalculate sensible defaults if not provided or invalid
+        if tax_amount is None:
+            tax_amount = (subtotal * Decimal('0.18')).quantize(Decimal('0.01'))
+        if shipping_amount is None:
+            shipping_amount = Decimal('0.00') if subtotal >= Decimal('1000') else Decimal('50.00')
+
+        total_amount = to_amount(attrs.get('total_amount'))
+        if total_amount is None:
+            total_amount = (subtotal + tax_amount + shipping_amount).quantize(Decimal('0.01'))
+
+        attrs['subtotal'] = subtotal
+        attrs['tax_amount'] = tax_amount
+        attrs['shipping_amount'] = shipping_amount
+        attrs['total_amount'] = total_amount
+
+        return attrs
 
     def create(self, validated_data):
         """Create order with items and payment information."""
@@ -85,11 +142,24 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             shipping_state = validated_data.get('shipping_state', '')
             shipping_postal_code = validated_data.get('shipping_postal_code', '')
 
-        # Calculate totals if not provided
-        subtotal = validated_data.get('subtotal', 0)
-        tax_amount = validated_data.get('tax_amount', subtotal * 0.18)  # 18% GST
-        shipping_amount = validated_data.get('shipping_amount', 50 if subtotal < 1000 else 0)  # Free shipping over ₹1000
-        total_amount = validated_data.get('total_amount', subtotal + tax_amount + shipping_amount)
+        # Calculate totals if not provided (ensure Decimal types)
+        from decimal import Decimal
+
+        subtotal = validated_data.get('subtotal')
+        if subtotal is None:
+            subtotal = Decimal('0.00')
+
+        tax_amount = validated_data.get('tax_amount')
+        if tax_amount is None:
+            tax_amount = (subtotal * Decimal('0.18')).quantize(Decimal('0.01'))  # 18% GST
+
+        shipping_amount = validated_data.get('shipping_amount')
+        if shipping_amount is None:
+            shipping_amount = Decimal('0.00') if subtotal >= Decimal('1000') else Decimal('50.00')  # Free shipping over ₹1000
+
+        total_amount = validated_data.get('total_amount')
+        if total_amount is None:
+            total_amount = (subtotal + tax_amount + shipping_amount).quantize(Decimal('0.01'))
 
         # Create order
         order = Order.objects.create(

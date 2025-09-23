@@ -13,7 +13,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
     <div className="flex items-center border-b border-gray-200 pb-6">
       <div className="w-24 h-24 mr-6">
         <img
-          src={item.image || 'https://via.placeholder.com/150'}
+          src={item.image || item?.tshirt?.primary_image || item?.tshirt?.all_images?.[0] || 'https://via.placeholder.com/150'}
           alt={item.title}
           className="w-full h-full object-cover rounded-lg"
         />

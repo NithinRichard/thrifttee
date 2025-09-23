@@ -49,7 +49,8 @@ export const getSecurityStatus = () => {
 export const sanitizeForLogging = (data) => {
   if (!data || typeof data !== 'object') return data;
 
-  const sensitiveFields = ['cardNumber', 'cvc', 'password', 'token', 'secret'];
+  // Include common variants used in forms
+  const sensitiveFields = ['cardNumber', 'cvv', 'cvc', 'expiryDate', 'password', 'token', 'secret'];
   const sanitized = { ...data };
 
   sensitiveFields.forEach(field => {

@@ -109,11 +109,24 @@ const appReducer = (state, action) => {
           ? raw
           : (raw && Array.isArray(raw.items) ? raw.items : []);
         const cart = items.map((it) => {
+          const tshirt = it.tshirt || it.product || {};
           const unitPrice = typeof it.price === 'number'
             ? it.price
-            : (it.tshirt?.price ?? it.product?.price ?? 0);
+            : (tshirt?.price ?? 0);
+
+          // Prefer explicit image on item, else derive from nested tshirt serializer
+          const image = it.image || tshirt.primary_image || (Array.isArray(tshirt.all_images) ? tshirt.all_images[0] : undefined);
+
           return {
             ...it,
+            // Hydrate common fields used by UI components
+            id: it.id ?? tshirt.id ?? it.product_id,
+            title: it.title || tshirt.title,
+            slug: it.slug || tshirt.slug,
+            brand: it.brand || tshirt.brand?.name,
+            size: it.size || tshirt.size,
+            color: it.color || tshirt.color,
+            image,
             price: unitPrice,
             quantity: it.quantity ?? 1,
           };

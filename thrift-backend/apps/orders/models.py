@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 from apps.products.models import TShirt
 
 class Order(models.Model):
@@ -83,7 +84,9 @@ class Order(models.Model):
     def save(self, *args, **kwargs):
         if not self.order_number:
             import uuid
-            timestamp = str(int(self.created_at.timestamp())) if hasattr(self, 'created_at') and self.created_at else str(int(models.functions.Now().timestamp()))
+            # Use a real datetime for timestamp; created_at isn't set before first save
+            now_ts = int((self.created_at or timezone.now()).timestamp())
+            timestamp = str(now_ts)
             self.order_number = f"ORD-{timestamp[-6:]}-{uuid.uuid4().hex[:4].upper()}"
         super().save(*args, **kwargs)
 

@@ -118,22 +118,37 @@ class ApiService {
       const response = await api.post('/orders/', orderData);
       return response.data;
     } catch (error) {
+      const isDemo = process.env.REACT_APP_DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
+
+      // If backend explicitly reports method not allowed, fall back to demo order
       if (error.response?.status === 405) {
         console.error('Orders POST endpoint not implemented in backend');
-        // For Rupay integration, we'll handle this gracefully
-        if (orderData.payment_method === 'rupay') {
-          console.log('Rupay payment data:', orderData);
-          // Simulate successful order creation for demo purposes
+        if (orderData.payment_method === 'rupay' && isDemo) {
+          console.log('Rupay payment data (demo fallback 405):', orderData);
           return {
             id: `demo_order_${Date.now()}`,
             status: 'pending',
             payment_method: 'rupay',
             transaction_id: orderData.payment_token,
-            message: 'Demo mode: Order created successfully'
+            message: 'Demo mode: Order created successfully (405 fallback)'
           };
         }
         throw new Error('Order creation is not currently supported. Please contact support.');
       }
+
+      // Network errors (e.g., backend not running). In demo mode, simulate order creation
+      const isNetworkError = !error.response;
+      if (isNetworkError && orderData?.payment_method === 'rupay' && isDemo) {
+        console.warn('Backend unavailable; simulating order creation in demo mode. Original error:', error);
+        return {
+          id: `demo_order_${Date.now()}`,
+          status: 'pending',
+          payment_method: 'rupay',
+          transaction_id: orderData.payment_token,
+          message: 'Demo mode: Order created successfully (network fallback)'
+        };
+      }
+
       throw error;
     }
   }
