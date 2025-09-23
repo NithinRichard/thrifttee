@@ -4,6 +4,11 @@ import { Link } from 'react-router-dom';
 import { formatINR } from '../../utils/currency';
 
 const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
+  // Ensure quantity is a valid number, default to 1 if invalid
+  const quantity = typeof item.quantity === 'number' && !isNaN(item.quantity) && item.quantity > 0
+    ? item.quantity
+    : 1;
+
   return (
     <div className="flex items-center border-b border-gray-200 pb-6">
       <div className="w-24 h-24 mr-6">
@@ -28,15 +33,15 @@ const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
       <div className="flex items-center space-x-4">
         <div className="flex items-center border border-gray-300 rounded-lg">
           <button
-            onClick={() => onUpdateQuantity(item.id, item.quantity - 1)}
-            disabled={item.quantity <= 1}
+            onClick={() => onUpdateQuantity(item.id, quantity - 1)}
+            disabled={quantity <= 1}
             className="px-3 py-1 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
           >
             -
           </button>
-          <span className="px-4 py-1 text-gray-800">{item.quantity}</span>
+          <span className="px-4 py-1 text-gray-800">{quantity}</span>
           <button
-            onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
+            onClick={() => onUpdateQuantity(item.id, quantity + 1)}
             className="px-3 py-1 text-gray-600 hover:bg-gray-100"
           >
             +

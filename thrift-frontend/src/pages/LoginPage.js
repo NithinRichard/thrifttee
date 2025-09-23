@@ -16,7 +16,7 @@ const LoginPage = () => {
       actions.setLoading(true);
       const response = await apiService.login(data);
       const token = response.token || response.access_token || localStorage.getItem('authToken');
-      actions.login(response.user, token);
+      await actions.login(response.user, token);
       navigate('/profile');
     } catch (error) {
       actions.setError('Invalid credentials. Please try again.');

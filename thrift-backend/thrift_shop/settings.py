@@ -5,7 +5,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-change-this-in-production-12345'
 DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1', 'testserver']  # Added 'testserver' for testing
 
 # Application definition
 DJANGO_APPS = [
@@ -132,3 +132,23 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Rupay Payment Gateway Configuration
+RUPAY_GATEWAY_URL = os.getenv('RUPAY_GATEWAY_URL', 'https://test-rupay.gateway.com')
+RUPAY_MERCHANT_ID = os.getenv('RUPAY_MERCHANT_ID', 'demo_merchant_id')
+RUPAY_TERMINAL_ID = os.getenv('RUPAY_TERMINAL_ID', 'demo_terminal_id')
+RUPAY_API_KEY = os.getenv('RUPAY_API_KEY', 'demo_api_key')
+
+# Payment Settings
+PAYMENT_CURRENCY = 'INR'
+TAX_RATE = 0.18  # 18% GST
+FREE_SHIPPING_THRESHOLD = 1000  # Free shipping over ₹1000
+DEFAULT_SHIPPING_CHARGE = 50
+
+# Security Settings
+SECURE_PAYMENT_PROCESSING = True
+ENABLE_PAYMENT_VERIFICATION = True
+
+# Logging for payments
+LOG_PAYMENT_EVENTS = True
+PAYMENT_LOG_LEVEL = 'INFO'

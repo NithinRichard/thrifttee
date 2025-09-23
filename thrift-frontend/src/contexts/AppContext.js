@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import apiService from '../services/api';
+import { validateQuantity } from '../utils/validation';
+import { useToast } from './ToastContext';
 
 // Initial state
 const initialState = {
@@ -15,7 +17,11 @@ const initialState = {
   cart: [],
   cartCount: 0,
   cartTotal: 0,
-  
+
+  // Wishlist
+  wishlist: [],
+  wishlistCount: 0,
+
   // User
   user: null,
   isAuthenticated: false,
@@ -50,6 +56,9 @@ export const actionTypes = {
   UPDATE_CART_ITEM: 'UPDATE_CART_ITEM',
   REMOVE_FROM_CART: 'REMOVE_FROM_CART',
   CLEAR_CART: 'CLEAR_CART',
+  ADD_TO_WISHLIST: 'ADD_TO_WISHLIST',
+  REMOVE_FROM_WISHLIST: 'REMOVE_FROM_WISHLIST',
+  CLEAR_WISHLIST: 'CLEAR_WISHLIST',
   
   // User
   SET_USER: 'SET_USER',
@@ -170,11 +179,42 @@ const appReducer = (state, action) => {
     case actionTypes.CLEAR_CART:
       return { ...state, cart: [], cartCount: 0, cartTotal: 0 };
     
+    case actionTypes.ADD_TO_WISHLIST:
+      const newWishlistItem = action.payload;
+      const existingWishlistItemIndex = (state.wishlist || []).findIndex(item => item.id === newWishlistItem.id);
+
+      if (existingWishlistItemIndex >= 0) {
+        // Item already exists, don't add duplicate
+        return state;
+      } else {
+        const updatedWishlist = [...(state.wishlist || []), newWishlistItem];
+        const newWishlistCount = updatedWishlist.length;
+
+        return {
+          ...state,
+          wishlist: updatedWishlist,
+          wishlistCount: newWishlistCount
+        };
+      }
+
+    case actionTypes.REMOVE_FROM_WISHLIST:
+      const filteredWishlist = (state.wishlist || []).filter(item => item.id !== action.payload);
+      const filteredWishlistCount = filteredWishlist.length;
+
+      return {
+        ...state,
+        wishlist: filteredWishlist,
+        wishlistCount: filteredWishlistCount
+      };
+
+    case actionTypes.CLEAR_WISHLIST:
+      return { ...state, wishlist: [], wishlistCount: 0 };
+
     case actionTypes.SET_USER:
       return { ...state, user: action.payload, isAuthenticated: true };
     
     case actionTypes.LOGOUT_USER:
-      return { ...state, user: null, isAuthenticated: false, cart: [], cartCount: 0, cartTotal: 0 };
+      return { ...state, user: null, isAuthenticated: false, cart: [], cartCount: 0, cartTotal: 0, wishlist: [], wishlistCount: 0 };
     
     default:
       return state;
@@ -187,6 +227,7 @@ const AppContext = createContext();
 // Context provider component
 export const AppProvider = ({ children }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
+  const toast = useToast();
 
   // Load initial data
   useEffect(() => {
@@ -288,26 +329,121 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: actionTypes.SET_FILTERS, payload: filters });
   }, []);
 
-  const addToCart = useCallback((item) => {
-    dispatch({ type: actionTypes.ADD_TO_CART, payload: item });
+  const addToCart = useCallback(async (item) => {
+    try {
+      // Validate and normalize quantity
+      const validQuantity = validateQuantity(item.quantity, 1);
+
+      // Call API to persist cart item to backend
+      await apiService.addToCart(item.id, validQuantity);
+
+      // Update frontend state
+      dispatch({ type: actionTypes.ADD_TO_CART, payload: { ...item, quantity: validQuantity } });
+
+      toast.showSuccess(`Added ${item.title || 'item'} to cart!`);
+    } catch (error) {
+      console.error('Failed to add item to cart:', error);
+
+      // Still update frontend state for better UX, even if API call fails
+      dispatch({ type: actionTypes.ADD_TO_CART, payload: { ...item, quantity: validateQuantity(item.quantity, 1) } });
+
+      toast.showError('Failed to add item to cart. Please try again.');
+    }
+  }, [toast]);
+
+  const updateCartItem = useCallback(async (itemId, quantity) => {
+    try {
+      // Validate and normalize quantity
+      const validQuantity = validateQuantity(quantity, 1);
+
+      // Call API to update cart item in backend
+      await apiService.updateCartItem(itemId, validQuantity);
+
+      // Update frontend state
+      dispatch({ type: actionTypes.UPDATE_CART_ITEM, payload: { itemId, quantity: validQuantity } });
+
+      toast.showSuccess('Cart updated successfully!');
+    } catch (error) {
+      console.error('Failed to update cart item:', error);
+
+      // Still update frontend state for better UX
+      const validQuantity = validateQuantity(quantity, 1);
+      dispatch({ type: actionTypes.UPDATE_CART_ITEM, payload: { itemId, quantity: validQuantity } });
+
+      toast.showError('Failed to update cart. Please try again.');
+    }
+  }, [toast]);
+
+  const removeFromCart = useCallback(async (itemId) => {
+    try {
+      // Try to remove item via API
+      await apiService.removeFromCart(itemId);
+
+      // Update frontend state
+      dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+
+      toast.showSuccess('Item removed from cart!');
+    } catch (error) {
+      console.error('Failed to remove item from cart:', error);
+
+      // Fallback: try to set quantity to 0 instead
+      try {
+        await apiService.updateCartItem(itemId, 0);
+        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+        toast.showSuccess('Item removed from cart!');
+      } catch (fallbackError) {
+        console.error('Fallback removal also failed:', fallbackError);
+        // Still update frontend state for better UX
+        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+
+        toast.showError('Item removed from cart but may reappear after refresh. Please try again.');
+      }
+    }
+  }, [toast]);
+
+  const clearCart = useCallback(async () => {
+    try {
+      // Call API to clear cart in backend
+      await apiService.clearCart();
+
+      dispatch({ type: actionTypes.CLEAR_CART });
+
+      toast.showSuccess('Cart cleared successfully!');
+    } catch (error) {
+      console.error('Failed to clear cart:', error);
+      // Still update frontend state for better UX
+      dispatch({ type: actionTypes.CLEAR_CART });
+
+      toast.showError('Failed to clear cart. Please try again.');
+    }
+  }, [toast]);
+
+  const addToWishlist = useCallback((item) => {
+    dispatch({ type: actionTypes.ADD_TO_WISHLIST, payload: item });
   }, []);
 
-  const updateCartItem = useCallback((itemId, quantity) => {
-    dispatch({ type: actionTypes.UPDATE_CART_ITEM, payload: { itemId, quantity } });
+  const removeFromWishlist = useCallback((itemId) => {
+    dispatch({ type: actionTypes.REMOVE_FROM_WISHLIST, payload: itemId });
   }, []);
 
-  const removeFromCart = useCallback((itemId) => {
-    dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+  const clearWishlist = useCallback(() => {
+    dispatch({ type: actionTypes.CLEAR_WISHLIST });
   }, []);
 
-  const clearCart = useCallback(() => {
-    dispatch({ type: actionTypes.CLEAR_CART });
-  }, []);
-
-  const login = useCallback((user, token) => {
+  const login = useCallback(async (user, token) => {
     localStorage.setItem('authToken', token);
     dispatch({ type: actionTypes.SET_USER, payload: user });
-  }, []);
+
+    // Load user's cart after successful login
+    try {
+      const cart = await apiService.getCart();
+      dispatch({ type: actionTypes.SET_CART, payload: cart });
+    } catch (error) {
+      console.warn('Failed to load cart after login:', error.message);
+      toast.showWarning('Welcome back! Your cart will be loaded when available.');
+      // Don't set error state here as login was successful
+    }
+  }, [toast]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('authToken');
@@ -328,6 +464,9 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    addToWishlist,
+    removeFromWishlist,
+    clearWishlist,
     login,
     logout,
   }), [
@@ -343,6 +482,9 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    addToWishlist,
+    removeFromWishlist,
+    clearWishlist,
     login,
     logout,
   ]);

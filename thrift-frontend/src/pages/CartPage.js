@@ -41,7 +41,7 @@ const CartPage = () => {
                     <CartItem
                       key={item.id}
                       item={item}
-                      onUpdateQuantity={actions.updateCartQuantity}
+                      onUpdateQuantity={actions.updateCartItem}
                       onRemove={actions.removeFromCart}
                     />
                   ))}
