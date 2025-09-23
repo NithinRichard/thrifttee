@@ -33,7 +33,7 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
     """Serializer for T-Shirt detail view (full data)."""
     brand = BrandSerializer(read_only=True)
     category = CategorySerializer(read_only=True)
-    all_images = serializers.ReadOnlyField()
+    all_images = serializers.SerializerMethodField()
     discount_percentage = serializers.ReadOnlyField()
     reviews_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
@@ -56,6 +56,21 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
         if reviews:
             return round(sum(review.rating for review in reviews) / len(reviews), 1)
         return 0
+
+    def get_all_images(self, obj):
+        request = self.context.get('request')
+        image_fields = [obj.primary_image, obj.image_2, obj.image_3, obj.image_4]
+        urls = []
+        for img in image_fields:
+            if img:
+                try:
+                    url = img.url
+                    if request is not None:
+                        url = request.build_absolute_uri(url)
+                    urls.append(url)
+                except Exception:
+                    continue
+        return urls
 
 class TShirtReviewSerializer(serializers.ModelSerializer):
     """Serializer for T-Shirt reviews."""

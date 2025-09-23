@@ -10,17 +10,11 @@ class TShirtFilter(django_filters.FilterSet):
     price_range = django_filters.RangeFilter(field_name="price")
     
     # Multiple choice filters
-    brand = django_filters.ModelMultipleChoiceFilter(
-        queryset=Brand.objects.all(),
-        field_name='brand',
-        to_field_name='slug'
-    )
+    # Filter by brand slug(s)
+    brand = django_filters.CharFilter(field_name='brand__slug', lookup_expr='exact')
     
-    category = django_filters.ModelMultipleChoiceFilter(
-        queryset=Category.objects.all(),
-        field_name='category',
-        to_field_name='slug'
-    )
+    # Filter by category slug(s)
+    category = django_filters.CharFilter(field_name='category__slug', lookup_expr='exact')
     
     size = django_filters.MultipleChoiceFilter(
         choices=TShirt.SIZE_CHOICES,

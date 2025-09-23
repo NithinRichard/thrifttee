@@ -15,7 +15,23 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     
     def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
+        data = request.data.copy()
+        # Map frontend fields to Django User fields
+        if not data.get('username'):
+            # Use email as username fallback
+            if data.get('email'):
+                data['username'] = data['email']
+            elif data.get('full_name'):
+                data['username'] = data['full_name']
+        # Populate first_name/last_name from full_name when provided
+        full_name = data.get('full_name')
+        if full_name and not (data.get('first_name') or data.get('last_name')):
+            parts = full_name.strip().split()
+            data['first_name'] = parts[0]
+            if len(parts) > 1:
+                data['last_name'] = ' '.join(parts[1:])
+
+        serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
@@ -37,6 +53,14 @@ class LoginView(generics.GenericAPIView):
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
+        # Allow login with email from frontend
+        if not username and request.data.get('email'):
+            email = request.data.get('email')
+            try:
+                user_obj = User.objects.get(email=email)
+                username = user_obj.username
+            except User.DoesNotExist:
+                username = None
         
         if username and password:
             user = authenticate(username=username, password=password)
