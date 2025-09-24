@@ -101,11 +101,9 @@ class Order(models.Model):
 class OrderItem(models.Model):
     """Order item model."""
     order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
-    tshirt = models.ForeignKey(TShirt, on_delete=models.CASCADE)
+    tshirt = models.ForeignKey(TShirt, on_delete=models.SET_NULL, null=True, blank=True)
     quantity = models.PositiveIntegerField()
     price = models.DecimalField(max_digits=10, decimal_places=2)  # Price at time of order
-    
-    # Product details at time of order (in case product changes)
     product_title = models.CharField(max_length=200)
     product_brand = models.CharField(max_length=100)
     product_size = models.CharField(max_length=10)

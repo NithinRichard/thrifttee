@@ -54,11 +54,9 @@ class CreateOrderSerializer(serializers.ModelSerializer):
     tax_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     shipping_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False, default=0)
     total_amount = serializers.DecimalField(max_digits=10, decimal_places=2, required=False)
-
     # Optional fields
     currency = serializers.CharField(max_length=3, required=False, default='INR')
     notes = serializers.CharField(required=False, allow_blank=True)
-
     class Meta:
         model = Order
         fields = [

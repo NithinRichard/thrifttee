@@ -33,6 +33,76 @@ const initialState = {
   filters: {},
 };
 
+const normalizeUser = (payload) => {
+  if (!payload) return null;
+
+  const userPayload = payload.user ?? payload;
+  const rawFullName = (payload.full_name ?? userPayload.full_name ?? '').trim();
+  const firstName = (userPayload.first_name ?? '').trim();
+  const lastName = (userPayload.last_name ?? '').trim();
+  const generatedFullName = [firstName, lastName].filter(Boolean).join(' ');
+  const email = userPayload.email ?? payload.email ?? '';
+
+  let profile = null;
+  if (payload.user) {
+    const { user: _nestedUser, ...profileFields } = payload;
+    profile = profileFields;
+  }
+
+  return {
+    ...userPayload,
+    email,
+    full_name: rawFullName || generatedFullName || userPayload.username || (email ? email.split('@')[0] : '') || 'User',
+    ...(profile ? { profile } : {}),
+  };
+};
+
+const normalizeWishlistItem = (payload) => {
+  if (!payload) return null;
+
+  const wishlistEntryId = payload.id ?? null;
+  const tshirt = payload.tshirt ?? payload.product ?? payload;
+  if (!tshirt) return null;
+
+  const id = tshirt.id ?? payload.tshirt_id ?? payload.product_id;
+  if (!id) return null;
+
+  const rawImages = Array.isArray(tshirt.all_images) ? tshirt.all_images : undefined;
+  const primaryImage = tshirt.primary_image || (rawImages && rawImages[0]) || payload.image || payload.primary_image;
+  const price = typeof tshirt.price === 'number' ? tshirt.price : Number(tshirt.price ?? 0);
+  const allImages = rawImages || (primaryImage ? [primaryImage] : []);
+
+  return {
+    id,
+    wishlistEntryId,
+    slug: tshirt.slug,
+    title: tshirt.title,
+    price,
+    brand: tshirt.brand ?? payload.brand ?? null,
+    category: tshirt.category ?? payload.category ?? null,
+    size: tshirt.size ?? payload.size ?? null,
+    color: tshirt.color ?? payload.color ?? null,
+    condition: tshirt.condition ?? payload.condition ?? null,
+    description: tshirt.description ?? payload.description ?? '',
+    original_price: typeof tshirt.original_price === 'number'
+      ? tshirt.original_price
+      : Number(tshirt.original_price ?? payload.original_price ?? price),
+    primary_image: primaryImage,
+    all_images: allImages,
+    image: primaryImage,
+    product: tshirt,
+    created_at: payload.created_at,
+  };
+};
+
+const normalizeWishlist = (items) => {
+  if (!items) return [];
+  const array = Array.isArray(items) ? items : items.results || [];
+  return array
+    .map((entry) => normalizeWishlistItem(entry))
+    .filter(Boolean);
+};
+
 // Action types
 export const actionTypes = {
   // Loading and errors
@@ -57,6 +127,7 @@ export const actionTypes = {
   REMOVE_FROM_CART: 'REMOVE_FROM_CART',
   CLEAR_CART: 'CLEAR_CART',
   ADD_TO_WISHLIST: 'ADD_TO_WISHLIST',
+  SET_WISHLIST: 'SET_WISHLIST',
   REMOVE_FROM_WISHLIST: 'REMOVE_FROM_WISHLIST',
   CLEAR_WISHLIST: 'CLEAR_WISHLIST',
   
@@ -192,39 +263,48 @@ const appReducer = (state, action) => {
     case actionTypes.CLEAR_CART:
       return { ...state, cart: [], cartCount: 0, cartTotal: 0 };
     
-    case actionTypes.ADD_TO_WISHLIST:
-      const newWishlistItem = action.payload;
-      const existingWishlistItemIndex = (state.wishlist || []).findIndex(item => item.id === newWishlistItem.id);
+    case actionTypes.SET_WISHLIST: {
+      const wishlist = normalizeWishlist(action.payload);
+      return { ...state, wishlist, wishlistCount: wishlist.length };
+    }
 
-      if (existingWishlistItemIndex >= 0) {
-        // Item already exists, don't add duplicate
-        return state;
+    case actionTypes.ADD_TO_WISHLIST: {
+      const newItem = normalizeWishlistItem(action.payload);
+      if (!newItem) return state;
+
+      const currentWishlist = state.wishlist || [];
+      const existingIndex = currentWishlist.findIndex(item => item.id === newItem.id);
+
+      let wishlist;
+      if (existingIndex >= 0) {
+        wishlist = currentWishlist.map(item =>
+          item.id === newItem.id ? { ...item, ...newItem } : item
+        );
       } else {
-        const updatedWishlist = [...(state.wishlist || []), newWishlistItem];
-        const newWishlistCount = updatedWishlist.length;
-
-        return {
-          ...state,
-          wishlist: updatedWishlist,
-          wishlistCount: newWishlistCount
-        };
+        wishlist = [...currentWishlist, newItem];
       }
-
-    case actionTypes.REMOVE_FROM_WISHLIST:
-      const filteredWishlist = (state.wishlist || []).filter(item => item.id !== action.payload);
-      const filteredWishlistCount = filteredWishlist.length;
 
       return {
         ...state,
-        wishlist: filteredWishlist,
-        wishlistCount: filteredWishlistCount
+        wishlist,
+        wishlistCount: wishlist.length,
       };
+    }
+
+    case actionTypes.REMOVE_FROM_WISHLIST: {
+      const wishlist = (state.wishlist || []).filter(item => item.id !== action.payload);
+      return {
+        ...state,
+        wishlist,
+        wishlistCount: wishlist.length,
+      };
+    }
 
     case actionTypes.CLEAR_WISHLIST:
       return { ...state, wishlist: [], wishlistCount: 0 };
 
     case actionTypes.SET_USER:
-      return { ...state, user: action.payload, isAuthenticated: true };
+      return { ...state, user: normalizeUser(action.payload), isAuthenticated: true };
     
     case actionTypes.LOGOUT_USER:
       return { ...state, user: null, isAuthenticated: false, cart: [], cartCount: 0, cartTotal: 0, wishlist: [], wishlistCount: 0 };
@@ -294,6 +374,13 @@ export const AppProvider = ({ children }) => {
           // Load user's cart
           const cart = await apiService.getCart();
           dispatch({ type: actionTypes.SET_CART, payload: cart });
+
+          try {
+            const wishlist = await apiService.getWishlist();
+            dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
+          } catch (wishlistError) {
+            console.warn('Failed to load wishlist during initialization:', wishlistError.message);
+          }
         } catch (error) {
           // Token might be invalid
           console.warn('Auth token validation failed:', error.message);
@@ -431,13 +518,64 @@ export const AppProvider = ({ children }) => {
     }
   }, [toast]);
 
-  const addToWishlist = useCallback((item) => {
-    dispatch({ type: actionTypes.ADD_TO_WISHLIST, payload: item });
-  }, []);
+  const fetchWishlist = useCallback(async () => {
+    if (!state.isAuthenticated) {
+      return;
+    }
+    try {
+      const wishlist = await apiService.getWishlist();
+      dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
+    } catch (error) {
+      console.error('Failed to fetch wishlist:', error);
+      toast?.showError?.('Failed to load wishlist. Please try again.');
+    }
+  }, [state.isAuthenticated, toast]);
 
-  const removeFromWishlist = useCallback((itemId) => {
-    dispatch({ type: actionTypes.REMOVE_FROM_WISHLIST, payload: itemId });
-  }, []);
+  const addToWishlist = useCallback(async (item) => {
+    if (!state.isAuthenticated) {
+      toast?.showWarning?.('Please log in to add items to your wishlist.');
+      return false;
+    }
+
+    const productId = item?.id ?? item?.product_id ?? item?.tshirt_id;
+    if (!productId) {
+      toast?.showError?.('Unable to add item to wishlist.');
+      return false;
+    }
+
+    try {
+      const response = await apiService.addToWishlist(productId);
+      dispatch({ type: actionTypes.ADD_TO_WISHLIST, payload: response });
+      toast?.showSuccess?.('Added to wishlist!');
+      return true;
+    } catch (error) {
+      console.error('Failed to add item to wishlist:', error);
+      toast?.showError?.('Failed to add to wishlist. Please try again.');
+      return false;
+    }
+  }, [state.isAuthenticated, toast]);
+
+  const removeFromWishlist = useCallback(async (productId) => {
+    if (!state.isAuthenticated) {
+      toast?.showWarning?.('Please log in to manage your wishlist.');
+      return false;
+    }
+
+    if (!productId) {
+      return false;
+    }
+
+    try {
+      await apiService.removeFromWishlist(productId);
+      dispatch({ type: actionTypes.REMOVE_FROM_WISHLIST, payload: productId });
+      toast?.showSuccess?.('Removed from wishlist.');
+      return true;
+    } catch (error) {
+      console.error('Failed to remove item from wishlist:', error);
+      toast?.showError?.('Failed to remove from wishlist. Please try again.');
+      return false;
+    }
+  }, [state.isAuthenticated, toast]);
 
   const clearWishlist = useCallback(() => {
     dispatch({ type: actionTypes.CLEAR_WISHLIST });
@@ -456,12 +594,25 @@ export const AppProvider = ({ children }) => {
       toast.showWarning('Welcome back! Your cart will be loaded when available.');
       // Don't set error state here as login was successful
     }
+
+    try {
+      const wishlist = await apiService.getWishlist();
+      dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
+    } catch (error) {
+      console.warn('Failed to load wishlist after login:', error.message);
+    }
   }, [toast]);
 
   const logout = useCallback(() => {
     localStorage.removeItem('authToken');
     dispatch({ type: actionTypes.LOGOUT_USER });
   }, []);
+
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      fetchWishlist();
+    }
+  }, [state.isAuthenticated, fetchWishlist]);
 
   // Combine all actions into a single stable object
   const actions = useMemo(() => ({
@@ -477,6 +628,7 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    fetchWishlist,
     addToWishlist,
     removeFromWishlist,
     clearWishlist,
@@ -495,6 +647,7 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    fetchWishlist,
     addToWishlist,
     removeFromWishlist,
     clearWishlist,

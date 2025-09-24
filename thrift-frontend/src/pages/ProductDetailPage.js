@@ -6,6 +6,7 @@ import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 import ProductCard from '../components/product/ProductCard';
 import { formatINR } from '../utils/currency';
+import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -93,7 +94,7 @@ const ProductDetailPage = () => {
             >
               <div className="bg-white p-4 rounded-lg shadow-lg">
                 <img
-                  src={(product.all_images && product.all_images[0]) || product.primary_image || 'https://via.placeholder.com/600x600'}
+                  src={(product.all_images && product.all_images[0]) || product.primary_image || DEFAULT_PRODUCT_IMAGE}
                   alt={product.title}
                   className="w-full h-auto object-cover rounded-lg"
                 />

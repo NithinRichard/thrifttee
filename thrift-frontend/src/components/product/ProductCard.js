@@ -1,11 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
 import { formatINR } from '../../utils/currency';
+import { DEFAULT_PRODUCT_IMAGE } from '../../utils/media';
 
 const ProductCard = ({ product }) => {
-  const { actions } = useApp();
+  const { state, actions } = useApp();
+
+  const isInWishlist = useMemo(() => {
+    return (state.wishlist || []).some((item) => item.id === product.id);
+  }, [state.wishlist, product.id]);
 
   const handleAddToCart = (e) => {
     e.preventDefault();
@@ -13,10 +19,14 @@ const ProductCard = ({ product }) => {
     actions.addToCart(product);
   };
 
-  const handleAddToWishlist = (e) => {
+  const handleToggleWishlist = async (e) => {
     e.preventDefault();
     e.stopPropagation();
-    actions.addToWishlist(product);
+    if (isInWishlist) {
+      await actions.removeFromWishlist(product.id);
+    } else {
+      await actions.addToWishlist(product);
+    }
   };
 
   const renderCategory = (category) => {
@@ -42,7 +52,7 @@ const ProductCard = ({ product }) => {
       <Link to={`/products/${product.slug}`}>
         <div className="relative overflow-hidden">
           <img
-            src={(product.primary_image || (product.all_images && product.all_images[0])) || 'https://via.placeholder.com/400x400'}
+            src={(product.primary_image || (product.all_images && product.all_images[0])) || DEFAULT_PRODUCT_IMAGE}
             alt={product.title}
             className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
           />
@@ -57,10 +67,11 @@ const ProductCard = ({ product }) => {
                 Add to Cart
               </button>
               <button
-                onClick={handleAddToWishlist}
-                className="bg-white text-gray-900 px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors"
+                onClick={handleToggleWishlist}
+                className={`bg-white ${isInWishlist ? 'text-red-500' : 'text-gray-900'} px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors`}
+                aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               >
-                ♥
+                {isInWishlist ? '♥' : '♡'}
               </button>
             </div>
           </div>
@@ -136,10 +147,11 @@ const ProductCard = ({ product }) => {
           Add to Cart
         </button>
         <button
-          onClick={handleAddToWishlist}
-          className="px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors duration-300"
+          onClick={handleToggleWishlist}
+          className={`px-3 py-2 border border-gray-300 rounded-lg transition-colors duration-300 ${isInWishlist ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-gray-50 text-gray-700'}`}
+          aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
         >
-          ♥
+          {isInWishlist ? '♥' : '♡'}
         </button>
       </div>
     </motion.div>

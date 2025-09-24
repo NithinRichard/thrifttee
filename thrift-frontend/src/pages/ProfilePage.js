@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
+import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
 
 const ProfilePage = () => {
   const { state, actions } = useApp();
@@ -37,6 +38,8 @@ const ProfilePage = () => {
       </div>
     );
   }
+
+  const hasOrders = Array.isArray(orders) && orders.length > 0;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -83,7 +86,7 @@ const ProfilePage = () => {
                 <div className="flex justify-center items-center py-12">
                   <div className="loading-spinner"></div>
                 </div>
-              ) : orders.length === 0 ? (
+              ) : !hasOrders ? (
                 <p className="text-gray-500">You haven't placed any orders yet.</p>
               ) : (
                 <div className="space-y-6">
@@ -97,19 +100,21 @@ const ProfilePage = () => {
                           </div>
                         </div>
                         <div className="font-bold text-lg text-vintage-600">
-                          ${order.total_price}
+                          ₹{(order.total_amount ?? order.total_price ?? 0).toFixed(2)}
                         </div>
                       </div>
                       <div>
-                        {order.order_items.map(item => (
+                        {(order.items || order.order_items || []).map(item => (
                           <div key={item.id} className="flex items-center py-2">
-                            <img 
-                              src={item.product.image || 'https://via.placeholder.com/50'} 
-                              alt={item.product.title} 
+                            <img
+                              src={item.product?.image || item.image || DEFAULT_PRODUCT_IMAGE}
+                              alt={item.product?.title || item.product_title || 'Product'}
                               className="w-12 h-12 object-cover rounded-md mr-4"
                             />
                             <div>
-                              <div className="font-bold text-gray-700">{item.product.title}</div>
+                              <div className="font-bold text-gray-700">
+                                {item.product?.title || item.product_title || 'Product'}
+                              </div>
                               <div className="text-sm text-gray-500">Qty: {item.quantity}</div>
                             </div>
                           </div>

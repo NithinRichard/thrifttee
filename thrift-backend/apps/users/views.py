@@ -110,7 +110,11 @@ class WishlistView(generics.ListAPIView):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        return Wishlist.objects.filter(user=self.request.user)
+        return (
+            Wishlist.objects
+            .filter(user=self.request.user)
+            .select_related('tshirt', 'tshirt__brand', 'tshirt__category')
+        )
 
 class AddToWishlistView(generics.CreateAPIView):
     """Add item to wishlist."""
@@ -125,12 +129,12 @@ class AddToWishlistView(generics.CreateAPIView):
                 user=request.user,
                 tshirt=tshirt
             )
-            
-            if created:
-                return Response({'message': 'Added to wishlist'}, status=status.HTTP_201_CREATED)
-            else:
-                return Response({'message': 'Already in wishlist'}, status=status.HTTP_200_OK)
-                
+            serializer = WishlistSerializer(
+                wishlist_item,
+                context={'request': request}
+            )
+            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            return Response(serializer.data, status=status_code)
         except TShirt.DoesNotExist:
             return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
 
@@ -142,6 +146,6 @@ class RemoveFromWishlistView(generics.DestroyAPIView):
         try:
             wishlist_item = Wishlist.objects.get(user=request.user, tshirt_id=tshirt_id)
             wishlist_item.delete()
-            return Response({'message': 'Removed from wishlist'})
+            return Response({'message': 'Removed from wishlist'}, status=status.HTTP_200_OK)
         except Wishlist.DoesNotExist:
             return Response({'error': 'Item not in wishlist'}, status=status.HTTP_404_NOT_FOUND)

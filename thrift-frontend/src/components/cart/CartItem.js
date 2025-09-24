@@ -2,6 +2,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { formatINR } from '../../utils/currency';
+import { DEFAULT_PRODUCT_IMAGE } from '../../utils/media';
 
 const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
   // Ensure quantity is a valid number, default to 1 if invalid
@@ -13,7 +14,7 @@ const CartItem = ({ item, onUpdateQuantity, onRemove }) => {
     <div className="flex items-center border-b border-gray-200 pb-6">
       <div className="w-24 h-24 mr-6">
         <img
-          src={item.image || item?.tshirt?.primary_image || item?.tshirt?.all_images?.[0] || 'https://via.placeholder.com/150'}
+          src={item.image || item?.tshirt?.primary_image || item?.tshirt?.all_images?.[0] || DEFAULT_PRODUCT_IMAGE}
           alt={item.title}
           className="w-full h-full object-cover rounded-lg"
         />

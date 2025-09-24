@@ -97,25 +97,33 @@ class RemoveFromCartView(generics.DestroyAPIView):
             else:
                 session_key = request.session.session_key
                 cart_item = CartItem.objects.get(id=item_id, cart__session_key=session_key)
-            
+
             cart_item.delete()
             return Response({'message': 'Item removed from cart'})
-            
+
         except CartItem.DoesNotExist:
             return Response({'error': 'Cart item not found'}, status=status.HTTP_404_NOT_FOUND)
 
 class ClearCartView(generics.GenericAPIView):
     """Clear all items from cart."""
     permission_classes = [AllowAny]
-    
+
     def post(self, request):
+        """Clear the cart via POST (legacy behavior)."""
+        return self._clear_cart(request)
+
+    def delete(self, request):
+        """Clear the cart via DELETE to align with REST semantics."""
+        return self._clear_cart(request)
+
+    def _clear_cart(self, request):
         if request.user.is_authenticated:
             cart = Cart.objects.filter(user=request.user).first()
         else:
             session_key = request.session.session_key
             cart = Cart.objects.filter(session_key=session_key).first()
-        
+
         if cart:
             cart.items.all().delete()
-        
+
         return Response({'message': 'Cart cleared'})

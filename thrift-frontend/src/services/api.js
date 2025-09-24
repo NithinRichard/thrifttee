@@ -86,6 +86,22 @@ class ApiService {
     return response.data;
   }
 
+  // Wishlist
+  async getWishlist() {
+    const response = await api.get('/users/wishlist/');
+    return response.data;
+  }
+
+  async addToWishlist(productId) {
+    const response = await api.post(`/users/wishlist/add/${productId}/`);
+    return response.data;
+  }
+
+  async removeFromWishlist(productId) {
+    const response = await api.delete(`/users/wishlist/remove/${productId}/`);
+    return response.data;
+  }
+
   // Cart
   async getCart() {
     const response = await api.get('/cart/');
