@@ -19,16 +19,24 @@ const ProductsPage = () => {
   const loadProducts = async () => {
     try {
       actions.setLoading(true);
-      const params = {
+      let params = {
         ...state.filters,
         search: state.searchQuery,
         page: currentPage,
         ordering: sortBy,
       };
-      
+
+      // Convert price_range to min_price and max_price for better backend compatibility
+      if (params.price_range && params.price_range !== 'all') {
+        const [minPrice, maxPrice] = params.price_range.split('-');
+        params.min_price = minPrice;
+        params.max_price = maxPrice === '+' ? undefined : maxPrice;
+        delete params.price_range;
+      }
+
       const response = await apiService.getProducts(params);
       actions.setProducts(response.results || response);
-      
+
       if (response.count) {
         setTotalPages(Math.ceil(response.count / 20));
       }

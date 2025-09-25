@@ -13,6 +13,7 @@ import CheckoutPage from './pages/CheckoutPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
+import WishlistPage from './pages/WishlistPage';
 import './styles/globals.css';
 
 // Create a client
@@ -43,6 +44,7 @@ function App() {
                   <Route path="/login" element={<LoginPage />} />
                   <Route path="/register" element={<RegisterPage />} />
                   <Route path="/profile" element={<ProfilePage />} />
+                  <Route path="/wishlist" element={<WishlistPage />} />
                 </Routes>
               </main>
               <Footer />

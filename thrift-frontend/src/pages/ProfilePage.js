@@ -100,7 +100,7 @@ const ProfilePage = () => {
                           </div>
                         </div>
                         <div className="font-bold text-lg text-vintage-600">
-                          ₹{(order.total_amount ?? order.total_price ?? 0).toFixed(2)}
+                          ₹{Number(order.total_amount ?? order.total_price ?? 0).toFixed(2)}
                         </div>
                       </div>
                       <div>

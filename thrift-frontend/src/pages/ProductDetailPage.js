@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
@@ -13,6 +13,14 @@ const ProductDetailPage = () => {
   const { state, actions } = useApp();
   const [product, setProduct] = useState(null);
   const [relatedProducts, setRelatedProducts] = useState([]);
+  const [wishlistProcessing, setWishlistProcessing] = useState(false);
+
+  const isInWishlist = useMemo(() => {
+    if (!product) {
+      return false;
+    }
+    return (state.wishlist || []).some((item) => item.id === product.id);
+  }, [state.wishlist, product?.id]);
 
   useEffect(() => {
     const loadProductData = async () => {
@@ -39,11 +47,28 @@ const ProductDetailPage = () => {
 
     loadProductData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [slug]);
+  }, [slug, actions]);
 
   const handleAddToCart = () => {
     if (product) {
       actions.addToCart(product);
+    }
+  };
+
+  const handleToggleWishlist = async () => {
+    if (!product || wishlistProcessing) {
+      return;
+    }
+
+    setWishlistProcessing(true);
+    try {
+      if (isInWishlist) {
+        await actions.removeFromWishlist(product.id);
+      } else {
+        await actions.addToWishlist(product);
+      }
+    } finally {
+      setWishlistProcessing(false);
     }
   };
 
@@ -154,12 +179,25 @@ const ProductDetailPage = () => {
                 </div>
               </div>
 
-              <button
-                onClick={handleAddToCart}
-                className="btn-primary w-full text-lg py-3"
-              >
-                Add to Cart
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleAddToCart}
+                  className="btn-primary w-full text-lg py-3"
+                >
+                  Add to Cart
+                </button>
+                <button
+                  onClick={handleToggleWishlist}
+                  disabled={wishlistProcessing}
+                  className={`w-full text-lg py-3 rounded-lg font-semibold transition-colors duration-300 border ${isInWishlist ? 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100' : 'bg-white text-gray-800 border-gray-300 hover:bg-gray-100'} ${wishlistProcessing ? 'opacity-70 cursor-not-allowed' : ''}`}
+                >
+                  {wishlistProcessing
+                    ? 'Updating...'
+                    : isInWishlist
+                      ? 'Remove from Wishlist'
+                      : 'Add to Wishlist'}
+                </button>
+              </div>
             </motion.div>
           </div>
         </motion.div>

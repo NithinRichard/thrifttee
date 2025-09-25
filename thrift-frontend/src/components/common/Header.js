@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import { useApp } from '../../contexts/AppContext';
 import SearchBar from './SearchBar';
 import CartIcon from './CartIcon';
+import WishlistIcon from './WishlistIcon';
 
 const Header = () => {
   const { state, actions } = useApp();
@@ -47,16 +48,22 @@ const Header = () => {
             >
               Shop
             </Link>
-            
+
             {state.isAuthenticated ? (
               <>
-                <Link 
-                  to="/profile" 
+                <Link
+                  to="/cart"
+                  className="text-gray-700 hover:text-vintage-600 transition-colors"
+                >
+                  Cart ({state.cartCount})
+                </Link>
+                <Link
+                  to="/profile"
                   className="text-gray-700 hover:text-vintage-600 transition-colors"
                 >
                   Profile
                 </Link>
-                <button 
+                <button
                   onClick={handleLogout}
                   className="text-gray-700 hover:text-vintage-600 transition-colors"
                 >
@@ -65,21 +72,22 @@ const Header = () => {
               </>
             ) : (
               <>
-                <Link 
-                  to="/login" 
+                <Link
+                  to="/login"
                   className="text-gray-700 hover:text-vintage-600 transition-colors"
                 >
                   Login
                 </Link>
-                <Link 
-                  to="/register" 
+                <Link
+                  to="/register"
                   className="btn-primary"
                 >
                   Sign Up
                 </Link>
               </>
             )}
-            
+
+            {state.isAuthenticated && <WishlistIcon />}
             <CartIcon />
           </nav>
 
@@ -113,6 +121,9 @@ const Header = () => {
               </Link>
               {state.isAuthenticated ? (
                 <>
+                  <Link to="/cart" className="text-gray-700 hover:text-vintage-600">
+                    Cart ({state.cartCount})
+                  </Link>
                   <Link to="/profile" className="text-gray-700 hover:text-vintage-600">
                     Profile
                   </Link>
@@ -130,9 +141,6 @@ const Header = () => {
                   </Link>
                 </>
               )}
-              <Link to="/cart" className="text-gray-700 hover:text-vintage-600">
-                Cart ({state.cartCount})
-              </Link>
             </div>
           </motion.div>
         )}

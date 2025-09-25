@@ -32,27 +32,26 @@ const ProductFilters = () => {
     ],
     size: [
       { value: 'all', label: 'All Sizes' },
-      { value: 'XS', label: 'XS' },
-      { value: 'S', label: 'S' },
-      { value: 'M', label: 'M' },
-      { value: 'L', label: 'L' },
-      { value: 'XL', label: 'XL' },
-      { value: 'XXL', label: 'XXL' }
+      { value: 'xs', label: 'XS' },
+      { value: 's', label: 'S' },
+      { value: 'm', label: 'M' },
+      { value: 'l', label: 'L' },
+      { value: 'xl', label: 'XL' },
+      { value: 'xxl', label: 'XXL' }
     ],
     condition: [
       { value: 'all', label: 'All Conditions' },
-      { value: 'new', label: 'New' },
       { value: 'excellent', label: 'Excellent' },
+      { value: 'very_good', label: 'Very Good' },
       { value: 'good', label: 'Good' },
-      { value: 'fair', label: 'Fair' },
-      { value: 'poor', label: 'Poor' }
+      { value: 'fair', label: 'Fair' }
     ],
     price_range: [
       { value: 'all', label: 'All Prices' },
-      { value: '0-25', label: '$0 - $25' },
-      { value: '25-50', label: '$25 - $50' },
-      { value: '50-100', label: '$50 - $100' },
-      { value: '100+', label: '$100+' }
+      { value: '0-500', label: '₹0 - ₹500' },
+      { value: '500-1000', label: '₹500 - ₹1,000' },
+      { value: '1000-2000', label: '₹1,000 - ₹2,000' },
+      { value: '2000-3000', label: '₹2,000 - ₹3,000' }
     ]
   };
 
