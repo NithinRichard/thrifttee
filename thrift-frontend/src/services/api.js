@@ -31,9 +31,27 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Handle unauthorized access
-      localStorage.removeItem('authToken');
-      window.location.href = '/login';
+      // Handle unauthorized access with retry logic
+      const originalRequest = error.config;
+
+      // Check if this is a retry attempt
+      if (!originalRequest._retry) {
+        originalRequest._retry = true;
+
+        // Try to refresh the token or re-authenticate
+        // For now, just remove the token but add better logging
+        console.warn('Authentication failed:', error.response.data);
+        console.warn('Removing auth token from localStorage');
+        localStorage.removeItem('authToken');
+
+        // Don't redirect immediately, let the component handle it
+        return Promise.reject(error);
+      } else {
+        // This is a retry attempt that also failed
+        console.error('Authentication retry failed, token removed');
+        localStorage.removeItem('authToken');
+        return Promise.reject(error);
+      }
     }
     return Promise.reject(error);
   }
@@ -251,9 +269,26 @@ class ApiService {
     return response.data;
   }
 
-  async updateProfile(profileData) {
-    const response = await api.put('/users/profile/', profileData);
-    return response.data;
+  async refreshAuth() {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      // Try to get profile to validate token
+      const user = await this.getProfile();
+      return user;
+    } catch (error) {
+      console.error('Token refresh failed:', error);
+
+      // Only remove token if it's specifically an auth error (401/403)
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        localStorage.removeItem('authToken');
+      }
+
+      throw error;
+    }
   }
 }
 

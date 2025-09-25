@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useForm } from 'react-hook-form';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
@@ -9,6 +9,7 @@ import apiService from '../services/api';
 const LoginPage = () => {
   const { state, actions } = useApp();
   const navigate = useNavigate();
+  const location = useLocation();
   const { register, handleSubmit, formState: { errors } } = useForm();
 
   const onSubmit = async (data) => {
@@ -17,13 +18,20 @@ const LoginPage = () => {
       const response = await apiService.login(data);
       const token = response.token || response.access_token || localStorage.getItem('authToken');
       await actions.login(response.user, token);
-      navigate('/profile');
+
+      // Check if there's a redirect path
+      const redirectTo = location.state?.redirectTo || '/profile';
+      const message = location.state?.message;
+
+      navigate(redirectTo);
     } catch (error) {
       actions.setError('Invalid credentials. Please try again.');
     } finally {
       actions.setLoading(false);
     }
   };
+
+  const message = location.state?.message;
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -36,6 +44,25 @@ const LoginPage = () => {
         <h1 className="text-4xl font-vintage font-bold text-gray-900 mb-8 text-center">
           Login
         </h1>
+
+        {message && (
+          <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6">
+            {message}
+          </div>
+        )}
+
+        {state.error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-6">
+            {state.error}
+          </div>
+        )}
+
+        {state.success && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-6">
+            {state.success}
+          </div>
+        )}
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           <div>
             <label className="label">Email</label>

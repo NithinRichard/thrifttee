@@ -60,15 +60,15 @@ const ProductFilters = () => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-lg p-6 sticky top-4">
-      <div className="flex justify-between items-center mb-6">
-        <h3 className="text-xl font-vintage font-bold text-gray-900">
+    <div className="bg-white rounded-lg shadow-lg p-4 md:p-6 sticky top-4">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-4 md:mb-6">
+        <h3 className="text-lg md:text-xl font-vintage font-bold text-gray-900 mb-2 sm:mb-0">
           Filters
         </h3>
         {getActiveFilterCount() > 0 && (
           <button
             onClick={clearAllFilters}
-            className="text-sm text-vintage-600 hover:text-vintage-700 font-semibold"
+            className="text-sm text-vintage-600 hover:text-vintage-700 font-semibold self-start sm:self-auto"
           >
             Clear All ({getActiveFilterCount()})
           </button>
@@ -88,86 +88,89 @@ const ProductFilters = () => {
         </motion.div>
       )}
 
-      {/* Category Filter */}
-      <div className="mb-6">
-        <h4 className="font-semibold text-gray-700 mb-3">Category</h4>
-        <select
-          value={state.filters.category || 'all'}
-          onChange={(e) => handleFilterChange('category', e.target.value)}
-          className="w-full input-field"
-        >
-          {filterOptions.category.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* Filter Sections */}
+      <div className="space-y-4 md:space-y-6">
+        {/* Category Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Category</h4>
+          <select
+            value={state.filters.category || 'all'}
+            onChange={(e) => handleFilterChange('category', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.category.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Size Filter */}
-      <div className="mb-6">
-        <h4 className="font-semibold text-gray-700 mb-3">Size</h4>
-        <select
-          value={state.filters.size || 'all'}
-          onChange={(e) => handleFilterChange('size', e.target.value)}
-          className="w-full input-field"
-        >
-          {filterOptions.size.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Size Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Size</h4>
+          <select
+            value={state.filters.size || 'all'}
+            onChange={(e) => handleFilterChange('size', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.size.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Condition Filter */}
-      <div className="mb-6">
-        <h4 className="font-semibold text-gray-700 mb-3">Condition</h4>
-        <select
-          value={state.filters.condition || 'all'}
-          onChange={(e) => handleFilterChange('condition', e.target.value)}
-          className="w-full input-field"
-        >
-          {filterOptions.condition.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Condition Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Condition</h4>
+          <select
+            value={state.filters.condition || 'all'}
+            onChange={(e) => handleFilterChange('condition', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.condition.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Price Range Filter */}
-      <div className="mb-6">
-        <h4 className="font-semibold text-gray-700 mb-3">Price Range</h4>
-        <select
-          value={state.filters.price_range || 'all'}
-          onChange={(e) => handleFilterChange('price_range', e.target.value)}
-          className="w-full input-field"
-        >
-          {filterOptions.price_range.map(option => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      </div>
+        {/* Price Range Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Price Range</h4>
+          <select
+            value={state.filters.price_range || 'all'}
+            onChange={(e) => handleFilterChange('price_range', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.price_range.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
 
-      {/* Featured Only Checkbox */}
-      <div className="mb-6">
-        <label className="flex items-center">
-          <input
-            type="checkbox"
-            checked={state.filters.is_featured || false}
-            onChange={(e) => handleFilterChange('is_featured', e.target.checked ? true : '')}
-            className="mr-2 text-vintage-600"
-          />
-          <span className="text-gray-700">Featured Products Only</span>
-        </label>
+        {/* Featured Only Checkbox */}
+        <div className="pt-2">
+          <label className="flex items-center cursor-pointer">
+            <input
+              type="checkbox"
+              checked={state.filters.is_featured || false}
+              onChange={(e) => handleFilterChange('is_featured', e.target.checked ? true : '')}
+              className="mr-3 text-vintage-600 w-4 h-4 md:w-5 md:h-5"
+            />
+            <span className="text-gray-700 text-sm md:text-base">Featured Products Only</span>
+          </label>
+        </div>
       </div>
 
       {/* Quick Stats */}
-      <div className="border-t pt-4">
-        <div className="text-sm text-gray-600 space-y-2">
+      <div className="border-t pt-4 mt-4 md:mt-6">
+        <div className="text-xs md:text-sm text-gray-600 space-y-2">
           <div className="flex justify-between">
             <span>Total Products:</span>
             <span className="font-semibold">{state.totalProducts || 'Loading...'}</span>

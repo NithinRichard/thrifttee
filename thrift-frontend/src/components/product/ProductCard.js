@@ -54,21 +54,21 @@ const ProductCard = ({ product }) => {
           <img
             src={(product.primary_image || (product.all_images && product.all_images[0])) || DEFAULT_PRODUCT_IMAGE}
             alt={product.title}
-            className="w-full h-64 object-cover object-center hover:scale-105 transition-transform duration-300"
+            className="w-full h-48 sm:h-56 md:h-64 object-cover object-center hover:scale-105 transition-transform duration-300"
           />
 
           {/* Overlay for quick actions */}
           <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
-            <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 flex space-x-2">
+            <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleAddToCart}
-                className="bg-white text-gray-900 px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors"
+                className="bg-white text-gray-900 px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 Add to Cart
               </button>
               <button
                 onClick={handleToggleWishlist}
-                className={`bg-white ${isInWishlist ? 'text-red-500' : 'text-gray-900'} px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors`}
+                className={`bg-white ${isInWishlist ? 'text-red-500' : 'text-gray-900'} px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center`}
                 aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               >
                 {isInWishlist ? '♥' : '♡'}
@@ -89,13 +89,13 @@ const ProductCard = ({ product }) => {
           )}
         </div>
 
-        <div className="p-4">
-          <h3 className="font-vintage font-bold text-lg text-gray-900 mb-2 line-clamp-2">
+        <div className="p-3 md:p-4">
+          <h3 className="font-vintage font-bold text-base md:text-lg text-gray-900 mb-2 line-clamp-2 min-h-[3rem] md:min-h-[3.5rem]">
             {product.title}
           </h3>
 
           <div className="flex justify-between items-center mb-3">
-            <div className="text-2xl font-bold text-vintage-600">
+            <div className="text-xl md:text-2xl font-bold text-vintage-600">
               {formatINR(product.price)}
             </div>
             {product.original_price && (
@@ -120,13 +120,13 @@ const ProductCard = ({ product }) => {
             )}
           </div>
 
-          <div className="mt-4 flex justify-between items-center">
+          <div className="mt-3 md:mt-4 flex justify-between items-center">
             <div className="flex items-center space-x-1">
-              <div className="flex text-yellow-400">
+              <div className="flex text-yellow-400 text-sm">
                 {'★'.repeat(Math.floor(product.rating || 4.5))}
                 {'☆'.repeat(5 - Math.floor(product.rating || 4.5))}
               </div>
-              <span className="text-sm text-gray-600 ml-1">
+              <span className="text-xs md:text-sm text-gray-600 ml-1">
                 ({product.review_count || 0})
               </span>
             </div>
@@ -138,20 +138,20 @@ const ProductCard = ({ product }) => {
         </div>
       </Link>
 
-      {/* Quick action buttons */}
-      <div className="px-4 pb-4 flex space-x-2">
+      {/* Quick action buttons - Improved for mobile */}
+      <div className="px-3 md:px-4 pb-3 md:pb-4 flex flex-col sm:flex-row gap-2">
         <button
           onClick={handleAddToCart}
-          className="flex-1 bg-vintage-600 text-white py-2 rounded-lg font-semibold hover:bg-vintage-700 transition-colors duration-300"
+          className="flex-1 bg-vintage-600 text-white py-3 md:py-2 rounded-lg font-semibold hover:bg-vintage-700 transition-colors duration-300 min-h-[44px] text-sm md:text-base"
         >
           Add to Cart
         </button>
         <button
           onClick={handleToggleWishlist}
-          className={`px-3 py-2 border border-gray-300 rounded-lg transition-colors duration-300 ${isInWishlist ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-gray-50 text-gray-700'}`}
+          className={`px-3 md:px-4 py-3 md:py-2 border border-gray-300 rounded-lg transition-colors duration-300 min-h-[44px] flex items-center justify-center ${isInWishlist ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-gray-50 text-gray-700'}`}
           aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
         >
-          {isInWishlist ? '♥' : '♡'}
+          <span className="text-lg">{isInWishlist ? '♥' : '♡'}</span>
         </button>
       </div>
     </motion.div>

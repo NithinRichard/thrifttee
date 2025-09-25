@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from decimal import Decimal, InvalidOperation
+from django.db import transaction
 from .models import Order, OrderItem
 
 class OrderItemSerializer(serializers.ModelSerializer):
@@ -159,56 +160,58 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         if total_amount is None:
             total_amount = (subtotal + tax_amount + shipping_amount).quantize(Decimal('0.01'))
 
-        # Create order
-        order = Order.objects.create(
-            user=self.context['request'].user,
-            shipping_name=customer_info['name'],
-            shipping_email=customer_info['email'],
-            shipping_address_line1=shipping_address_line1,
-            shipping_city=shipping_city,
-            shipping_state=shipping_state,
-            shipping_postal_code=shipping_postal_code,
-            payment_method=validated_data.get('payment_method', 'razorpay'),
-            razorpay_order_id=validated_data.get('razorpay_order_id', ''),
-            razorpay_payment_id=validated_data.get('razorpay_payment_id', ''),
-            razorpay_signature=validated_data.get('razorpay_signature', ''),
-            payment_status=validated_data.get('payment_status', 'pending'),
-            transaction_id=transaction_details.get('transaction_id', ''),
-            currency=validated_data.get('currency', 'INR'),
-            subtotal=subtotal,
-            tax_amount=tax_amount,
-            shipping_amount=shipping_amount,
-            total_amount=total_amount,
-            notes=validated_data.get('notes', '')
-        )
+        # Wrap order creation and item creation in a single transaction
+        with transaction.atomic():
+            # Create order
+            order = Order.objects.create(
+                user=self.context['request'].user,
+                shipping_name=customer_info['name'],
+                shipping_email=customer_info['email'],
+                shipping_address_line1=shipping_address_line1,
+                shipping_city=shipping_city,
+                shipping_state=shipping_state,
+                shipping_postal_code=shipping_postal_code,
+                payment_method=validated_data.get('payment_method', 'razorpay'),
+                razorpay_order_id=validated_data.get('razorpay_order_id', ''),
+                razorpay_payment_id=validated_data.get('razorpay_payment_id', ''),
+                razorpay_signature=validated_data.get('razorpay_signature', ''),
+                payment_status=validated_data.get('payment_status', 'pending'),
+                transaction_id=transaction_details.get('transaction_id', ''),
+                currency=validated_data.get('currency', 'INR'),
+                subtotal=subtotal,
+                tax_amount=tax_amount,
+                shipping_amount=shipping_amount,
+                total_amount=total_amount,
+                notes=validated_data.get('notes', '')
+            )
 
-        # Create order items
-        from apps.products.models import TShirt
-        for item_data in order_items_data:
-            try:
-                tshirt = TShirt.objects.get(id=item_data['product'])
-                OrderItem.objects.create(
-                    order=order,
-                    tshirt=tshirt,
-                    quantity=item_data['quantity'],
-                    price=tshirt.price,  # Current price
-                    product_title=tshirt.title,
-                    product_brand=tshirt.brand,
-                    product_size=tshirt.size,
-                    product_color=tshirt.color
-                )
-            except TShirt.DoesNotExist:
-                # Create item with stored product data if product doesn't exist
-                OrderItem.objects.create(
-                    order=order,
-                    tshirt=None,  # No associated TShirt object
-                    quantity=item_data['quantity'],
-                    price=item_data.get('price', 0),
-                    product_title=item_data.get('title', 'Unknown Product'),
-                    product_brand=item_data.get('brand', 'Unknown Brand'),
-                    product_size=item_data.get('size', 'N/A'),
-                    product_color=item_data.get('color', 'N/A')
-                )
+            # Create order items
+            from apps.products.models import TShirt
+            for item_data in order_items_data:
+                try:
+                    tshirt = TShirt.objects.get(id=item_data['product'])
+                    OrderItem.objects.create(
+                        order=order,
+                        tshirt=tshirt,
+                        quantity=item_data['quantity'],
+                        price=tshirt.price,  # Current price
+                        product_title=tshirt.title,
+                        product_brand=tshirt.brand,
+                        product_size=tshirt.size,
+                        product_color=tshirt.color
+                    )
+                except TShirt.DoesNotExist:
+                    # Create item with stored product data if product doesn't exist
+                    OrderItem.objects.create(
+                        order=order,
+                        tshirt=None,  # No associated TShirt object
+                        quantity=item_data['quantity'],
+                        price=item_data.get('price', 0),
+                        product_title=item_data.get('title', 'Unknown Product'),
+                        product_brand=item_data.get('brand', 'Unknown Brand'),
+                        product_size=item_data.get('size', 'N/A'),
+                        product_color=item_data.get('color', 'N/A')
+                    )
 
         return order
 

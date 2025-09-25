@@ -367,24 +367,47 @@ export const AppProvider = ({ children }) => {
       // Check for existing auth token
       const token = localStorage.getItem('authToken');
       if (token) {
-        try {
-          const user = await apiService.getProfile();
-          dispatch({ type: actionTypes.SET_USER, payload: user });
+        // Add retry logic for token validation
+        let retryCount = 0;
+        const maxRetries = 3;
 
-          // Load user's cart
-          const cart = await apiService.getCart();
-          dispatch({ type: actionTypes.SET_CART, payload: cart });
-
+        while (retryCount < maxRetries) {
           try {
-            const wishlist = await apiService.getWishlist();
-            dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
-          } catch (wishlistError) {
-            console.warn('Failed to load wishlist during initialization:', wishlistError.message);
+            const user = await apiService.getProfile();
+            dispatch({ type: actionTypes.SET_USER, payload: user });
+
+            // Load user's cart (isolated from auth failures)
+            try {
+              const cart = await apiService.getCart();
+              dispatch({ type: actionTypes.SET_CART, payload: cart });
+            } catch (cartError) {
+              console.warn('Failed to load cart during initialization:', cartError.message);
+            }
+
+            try {
+              const wishlist = await apiService.getWishlist();
+              dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
+            } catch (wishlistError) {
+              console.warn('Failed to load wishlist during initialization:', wishlistError.message);
+            }
+
+            // Successfully authenticated, break out of retry loop
+            break;
+          } catch (error) {
+            retryCount++;
+            console.warn(`Auth token validation failed (attempt ${retryCount}/${maxRetries}):`, error.message);
+
+            if (retryCount >= maxRetries && error?.response?.status === 401) {
+              // All retries failed AND it's specifically an auth error, remove invalid token
+              console.warn('All token validation retries failed, removing token');
+              localStorage.removeItem('authToken');
+              dispatch({ type: actionTypes.LOGOUT_USER });
+              dispatch({ type: actionTypes.SET_ERROR, payload: 'Session expired. Please login again.' });
+            } else {
+              // Wait before retry (exponential backoff) - only for non-auth errors
+              await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            }
           }
-        } catch (error) {
-          // Token might be invalid
-          console.warn('Auth token validation failed:', error.message);
-          localStorage.removeItem('authToken');
         }
       }
 
@@ -444,9 +467,6 @@ export const AppProvider = ({ children }) => {
     } catch (error) {
       console.error('Failed to add item to cart:', error);
 
-      // Still update frontend state for better UX, even if API call fails
-      dispatch({ type: actionTypes.ADD_TO_CART, payload: { ...item, quantity: validateQuantity(item.quantity, 1) } });
-
       toast.showError('Failed to add item to cart. Please try again.');
     }
   }, [toast]);
@@ -465,10 +485,6 @@ export const AppProvider = ({ children }) => {
       toast.showSuccess('Cart updated successfully!');
     } catch (error) {
       console.error('Failed to update cart item:', error);
-
-      // Still update frontend state for better UX
-      const validQuantity = validateQuantity(quantity, 1);
-      dispatch({ type: actionTypes.UPDATE_CART_ITEM, payload: { itemId, quantity: validQuantity } });
 
       toast.showError('Failed to update cart. Please try again.');
     }
@@ -493,8 +509,6 @@ export const AppProvider = ({ children }) => {
         toast.showSuccess('Item removed from cart!');
       } catch (fallbackError) {
         console.error('Fallback removal also failed:', fallbackError);
-        // Still update frontend state for better UX
-        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
 
         toast.showError('Item removed from cart but may reappear after refresh. Please try again.');
       }
@@ -511,8 +525,6 @@ export const AppProvider = ({ children }) => {
       toast.showSuccess('Cart cleared successfully!');
     } catch (error) {
       console.error('Failed to clear cart:', error);
-      // Still update frontend state for better UX
-      dispatch({ type: actionTypes.CLEAR_CART });
 
       toast.showError('Failed to clear cart. Please try again.');
     }
@@ -603,16 +615,49 @@ export const AppProvider = ({ children }) => {
     }
   }, [toast]);
 
+  const refreshAuth = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No auth token found');
+      }
+
+      const user = await apiService.getProfile();
+      dispatch({ type: actionTypes.SET_USER, payload: user });
+
+      // Reload user's cart and wishlist
+      try {
+        const cart = await apiService.getCart();
+        dispatch({ type: actionTypes.SET_CART, payload: cart });
+      } catch (cartError) {
+        console.warn('Failed to reload cart:', cartError.message);
+      }
+
+      try {
+        const wishlist = await apiService.getWishlist();
+        dispatch({ type: actionTypes.SET_WISHLIST, payload: wishlist });
+      } catch (wishlistError) {
+        console.warn('Failed to reload wishlist:', wishlistError.message);
+      }
+
+      return user;
+    } catch (error) {
+      console.error('Failed to refresh authentication:', error);
+
+      // Only log out if it's specifically an auth error (401/403)
+      if (error?.response?.status === 401 || error?.response?.status === 403) {
+        localStorage.removeItem('authToken');
+        dispatch({ type: actionTypes.LOGOUT_USER });
+      }
+
+      throw error;
+    }
+  }, []);
+
   const logout = useCallback(() => {
     localStorage.removeItem('authToken');
     dispatch({ type: actionTypes.LOGOUT_USER });
   }, []);
-
-  useEffect(() => {
-    if (state.isAuthenticated) {
-      fetchWishlist();
-    }
-  }, [state.isAuthenticated, fetchWishlist]);
 
   // Combine all actions into a single stable object
   const actions = useMemo(() => ({
@@ -634,6 +679,7 @@ export const AppProvider = ({ children }) => {
     clearWishlist,
     login,
     logout,
+    refreshAuth,
   }), [
     setLoading,
     setError,
@@ -653,6 +699,7 @@ export const AppProvider = ({ children }) => {
     clearWishlist,
     login,
     logout,
+    refreshAuth,
   ]);
 
   return (

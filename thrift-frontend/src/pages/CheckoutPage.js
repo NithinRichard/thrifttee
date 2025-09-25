@@ -12,23 +12,181 @@ const CheckoutPage = () => {
   const [orderData, setOrderData] = useState(null);
   const [paymentError, setPaymentError] = useState('');
 
+  const [isCheckingOrder, setIsCheckingOrder] = useState(false);
+
   useEffect(() => {
-    if (!state.isAuthenticated) {
-      navigate('/login');
-      return;
-    }
+    // Prevent multiple simultaneous calls
+    if (isCheckingOrder) return;
 
-    if (state.cart.length === 0) {
-      navigate('/products');
-      return;
-    }
+    // Check for pending order first, regardless of authentication state
+    setIsCheckingOrder(true);
+    checkForExistingOrder();
+  }, [navigate, isCheckingOrder]);
 
-    initializeCheckout();
-  }, [state.isAuthenticated, state.cart, navigate]);
+  const checkForExistingOrder = async () => {
+    try {
+      // First check if there's already a pending order
+      const pendingResponse = await apiService.get('/orders/pending_order/');
+
+      if (pendingResponse.has_pending_order) {
+        // User has a pending order, check if they're authenticated
+        if (!state.isAuthenticated) {
+          // Try to refresh authentication first
+          try {
+            setPaymentError('Refreshing your session...');
+            await actions.refreshAuth();
+            // If successful, update the state instead of reloading
+            setPaymentError('Session refreshed successfully!');
+            // Re-check for existing order with updated authentication
+            setTimeout(async () => {
+              try {
+                const retryResponse = await apiService.get('/orders/pending_order/');
+                if (retryResponse.has_pending_order) {
+                  setOrderData({
+                    ...retryResponse,
+                    amount: retryResponse.amount, // Already in paise
+                    key: retryResponse.key
+                  });
+                  setLoading(false);
+                } else {
+                  // No pending order after refresh, fall back to normal flow
+                  if (state.cart.length === 0) {
+                    navigate('/products');
+                  } else {
+                    initializeCheckout();
+                  }
+                }
+              } catch (retryError) {
+                console.error('Retry failed:', retryError);
+                setPaymentError('Failed to refresh session. Please login again.');
+                setTimeout(() => {
+                  navigate('/login', {
+                    state: {
+                      redirectTo: '/checkout',
+                      message: 'Please login to continue with your order.'
+                    }
+                  });
+                }, 2000);
+              }
+            }, 1000);
+            return;
+          } catch (refreshError) {
+            console.warn('Token refresh failed:', refreshError);
+          }
+
+          // Try to refresh authentication or handle unauthenticated state
+          setPaymentError('Your session may have expired. Please login to continue with your pending order.');
+          setTimeout(() => {
+            setIsCheckingOrder(false);
+            navigate('/login', {
+              state: {
+                redirectTo: '/checkout',
+                message: 'You have a pending order. Please login to continue.'
+              }
+            });
+          }, 2000);
+          return;
+        }
+
+        // User is authenticated and has pending order, use it
+        setOrderData({
+          ...pendingResponse,
+          amount: pendingResponse.amount, // Already in paise
+          key: pendingResponse.key
+        });
+        setLoading(false);
+        setIsCheckingOrder(false);
+        return;
+      }
+
+      // No pending order found
+      if (!state.isAuthenticated) {
+        setIsCheckingOrder(false);
+        navigate('/login');
+        return;
+      }
+
+      if (state.cart.length === 0) {
+        setIsCheckingOrder(false);
+        navigate('/products');
+        return;
+      }
+
+      // Create new order
+      initializeCheckout();
+    } catch (error) {
+      console.error('Error checking for existing order:', error);
+      setIsCheckingOrder(false);
+
+      // If it's an authentication error, try to refresh the token
+      if (error.response?.status === 401) {
+        try {
+          await actions.refreshAuth();
+          // If successful, try again with a direct API call instead of recursion
+          setTimeout(async () => {
+            try {
+              const retryResponse = await apiService.get('/orders/pending_order/');
+              if (retryResponse.has_pending_order) {
+                setOrderData({
+                  ...retryResponse,
+                  amount: retryResponse.amount, // Already in paise
+                  key: retryResponse.key
+                });
+                setLoading(false);
+              } else {
+                // No pending order after refresh, fall back to normal flow
+                if (state.cart.length === 0) {
+                  setIsCheckingOrder(false);
+                  navigate('/products');
+                } else {
+                  setIsCheckingOrder(false);
+                  initializeCheckout();
+                }
+              }
+            } catch (retryError) {
+              console.error('Retry failed:', retryError);
+              setIsCheckingOrder(false);
+              setPaymentError('Failed to refresh session. Please login again.');
+              setTimeout(() => {
+                navigate('/login', {
+                  state: {
+                    redirectTo: '/checkout',
+                    message: 'Please login to continue with your order.'
+                  }
+                });
+              }, 2000);
+            }
+          }, 1000);
+          return;
+        } catch (refreshError) {
+          console.warn('Token refresh failed:', refreshError);
+          setIsCheckingOrder(false);
+        }
+      }
+
+      // If error checking pending order, fall back to normal flow
+      if (!state.isAuthenticated) {
+        setIsCheckingOrder(false);
+        navigate('/login');
+        return;
+      }
+
+      if (state.cart.length === 0) {
+        setIsCheckingOrder(false);
+        navigate('/products');
+        return;
+      }
+
+      setIsCheckingOrder(false);
+      initializeCheckout();
+    }
+  };
 
   const initializeCheckout = async () => {
     try {
       setLoading(true);
+
+      // No pending order, create a new one
       const response = await apiService.post('/orders/create_razorpay_order/', {});
       setOrderData(response);
     } catch (error) {
@@ -36,6 +194,7 @@ const CheckoutPage = () => {
       console.error('Checkout initialization error:', error);
     } finally {
       setLoading(false);
+      setIsCheckingOrder(false);
     }
   };
 
@@ -63,16 +222,32 @@ const CheckoutPage = () => {
             };
 
             const verificationResponse = await apiService.post('/orders/verify_payment/', verificationData);
+            console.log('Verification response:', verificationResponse);
 
-            if (verificationResponse.status === 'success') {
-              actions.setSuccess('Payment successful! Your order is being processed.');
+            if (verificationResponse && verificationResponse.status === 'success') {
+              // Show success message using state
+              setPaymentError(''); // Clear any existing error
+              alert('Payment successful! Your order is being processed.');
               navigate('/profile');
             } else {
+              console.error('Payment verification failed:', verificationResponse);
               setPaymentError('Payment verification failed. Please contact support.');
             }
           } catch (error) {
-            setPaymentError('Payment verification failed. Please try again.');
             console.error('Payment verification error:', error);
+            console.error('Error response:', error.response);
+            console.error('Error status:', error.response?.status);
+            console.error('Error data:', error.response?.data);
+
+            if (error.response?.status === 401) {
+              // Authentication failed, redirect to login
+              setPaymentError('Authentication failed. Please login again.');
+              setTimeout(() => {
+                navigate('/login');
+              }, 2000);
+            } else {
+              setPaymentError('Payment verification failed. Please try again.');
+            }
           }
         },
         prefill: {
@@ -94,9 +269,27 @@ const CheckoutPage = () => {
         const rzp = new window.Razorpay(options);
         rzp.open();
       } else {
-        setPaymentError('Payment gateway not loaded. Please refresh and try again.');
-      }
+        // If not loaded, try to load it dynamically
+        setLoading(true);
+        setPaymentError('Loading payment gateway...');
 
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => {
+          if (window.Razorpay) {
+            const rzp = new window.Razorpay(options);
+            rzp.open();
+          } else {
+            setPaymentError('Failed to load payment gateway. Please refresh and try again.');
+          }
+        };
+        script.onerror = () => {
+          setPaymentError('Failed to load payment gateway. Please check your internet connection and try again.');
+        };
+        document.body.appendChild(script);
+      }
+      setLoading(false);
     } catch (error) {
       setPaymentError('Failed to initiate payment. Please try again.');
       console.error('Payment initiation error:', error);
@@ -265,5 +458,3 @@ const CheckoutPage = () => {
 };
 
 export default CheckoutPage;
-
-    

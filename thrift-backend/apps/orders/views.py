@@ -7,6 +7,7 @@ from django.conf import settings
 from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
+from django.db import transaction
 from decimal import Decimal
 import razorpay
 import json
@@ -35,10 +36,50 @@ class OrderViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user)
 
-    def get_serializer_class(self):
-        if self.action == 'create':
-            return CreateOrderSerializer
-        return OrderSerializer
+    @action(detail=False, methods=['get'])
+    def pending_order(self, request):
+        """Check if user has a pending order that needs payment."""
+        try:
+            # Check if user is authenticated
+            if not request.user.is_authenticated:
+                return Response({
+                    'has_pending_order': False,
+                    'message': 'User not authenticated'
+                })
+
+            # Look for orders with pending payment status
+            pending_orders = Order.objects.filter(
+                user=request.user,
+                payment_status='pending'
+            ).order_by('-created_at')
+
+            if pending_orders.exists():
+                order = pending_orders.first()
+                return Response({
+                    'has_pending_order': True,
+                    'order_id': order.id,
+                    'razorpay_order_id': order.razorpay_order_id,
+                    'amount': int(order.total_amount * 100),  # Convert to paise
+                    'currency': order.currency,
+                    'key': settings.RAZORPAY_KEY_ID,
+                    'order_details': {
+                        'subtotal': order.subtotal,
+                        'tax_amount': order.tax_amount,
+                        'shipping_amount': order.shipping_amount,
+                        'total_amount': order.total_amount
+                    }
+                })
+            else:
+                return Response({
+                    'has_pending_order': False,
+                    'message': 'No pending orders found'
+                })
+
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to check pending orders: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def create_razorpay_order(self, request):
@@ -51,6 +92,29 @@ class OrderViewSet(viewsets.ModelViewSet):
                     {'error': 'Cart is empty'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
+
+            # Check if user already has a pending order
+            existing_pending_order = Order.objects.filter(
+                user=request.user,
+                payment_status='pending'
+            ).first()
+
+            if existing_pending_order:
+                return Response({
+                    'razorpay_order_id': existing_pending_order.razorpay_order_id,
+                    'amount': int(existing_pending_order.total_amount * 100),
+                    'currency': existing_pending_order.currency,
+                    'receipt': f'order_{request.user.id}_{int(existing_pending_order.created_at.timestamp())}',
+                    'key': settings.RAZORPAY_KEY_ID,
+                    'order_id': existing_pending_order.id,
+                    'order_details': {
+                        'subtotal': existing_pending_order.subtotal,
+                        'tax_amount': existing_pending_order.tax_amount,
+                        'shipping_amount': existing_pending_order.shipping_amount,
+                        'total_amount': existing_pending_order.total_amount
+                    },
+                    'message': 'Using existing pending order'
+                })
 
             # Calculate totals
             subtotal = cart.total_price
@@ -77,12 +141,54 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             razorpay_order = self.razorpay_client.order.create(data=razorpay_order_data)
 
+            # Wrap order creation, item cloning, and cart clearing in a single transaction
+            with transaction.atomic():
+                # Create order record in database
+                order = Order.objects.create(
+                    user=request.user,
+                    order_number=f"ORD-{razorpay_order['id'][-8:]}-{request.user.id}",
+                    status='pending',
+                    payment_status='pending',
+                    subtotal=subtotal,
+                    tax_amount=tax_amount,
+                    shipping_amount=shipping_amount,
+                    total_amount=total_amount,
+                    shipping_name=f"{request.user.first_name} {request.user.last_name}".strip() or request.user.username,
+                    shipping_email=request.user.email,
+                    shipping_phone=getattr(request.user, 'phone', ''),
+                    shipping_address_line1='',
+                    shipping_city='',
+                    shipping_state='',
+                    shipping_postal_code='',
+                    shipping_country='India',
+                    payment_method='razorpay',
+                    razorpay_order_id=razorpay_order['id'],
+                    currency='INR'
+                )
+
+                # Create order items
+                for item in cart.items.all():
+                    OrderItem.objects.create(
+                        order=order,
+                        tshirt=item.tshirt,
+                        quantity=item.quantity,
+                        price=item.tshirt.price,
+                        product_title=item.tshirt.title,
+                        product_brand=item.tshirt.brand.name,
+                        product_size=item.tshirt.size,
+                        product_color=item.tshirt.color
+                    )
+
+                # NOTE: Cart is NOT cleared here - only after successful payment
+                # This allows users to refresh the page without losing their cart
+
             return Response({
                 'razorpay_order_id': razorpay_order['id'],
                 'amount': razorpay_order['amount'],
                 'currency': razorpay_order['currency'],
                 'receipt': razorpay_order['receipt'],
                 'key': settings.RAZORPAY_KEY_ID,
+                'order_id': order.id,
                 'order_details': {
                     'subtotal': subtotal,
                     'tax_amount': tax_amount,
@@ -107,9 +213,10 @@ class OrderViewSet(viewsets.ModelViewSet):
         """Verify Razorpay payment status."""
         try:
             razorpay_order_id = request.data.get('razorpay_order_id')
-            razorpay_payment_id = request.data.get('razorpay_signature')
+            razorpay_payment_id = request.data.get('razorpay_payment_id')
+            razorpay_signature = request.data.get('razorpay_signature')
 
-            if not all([razorpay_order_id, razorpay_payment_id]):
+            if not all([razorpay_order_id, razorpay_payment_id, razorpay_signature]):
                 return Response(
                     {'error': 'Missing required payment verification data'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -148,6 +255,13 @@ class OrderViewSet(viewsets.ModelViewSet):
             if payment_data['status'] == 'captured':
                 order.payment_status = 'completed'
                 order.status = 'processing'
+
+                # Clear user's cart only after successful payment
+                try:
+                    cart = Cart.objects.get(user=request.user)
+                    cart.items.all().delete()
+                except Cart.DoesNotExist:
+                    pass  # Cart already cleared or doesn't exist
             elif payment_data['status'] == 'failed':
                 order.payment_status = 'failed'
             else:

@@ -84,6 +84,81 @@ img {
   height: auto;
 }
 
+/* Mobile-first responsive utilities */
+.container {
+  @apply px-4 mx-auto;
+}
+
+@media (min-width: 640px) {
+  .container {
+    @apply px-6;
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    @apply px-8;
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    @apply px-8;
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    @apply px-8;
+    max-width: 1280px;
+  }
+}
+
+/* Mobile touch targets */
+@media (max-width: 768px) {
+  button, .btn-primary, .btn-secondary {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Improve tap targets for interactive elements */
+  a, button, input, select, textarea {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Better spacing on mobile */
+  .mobile-spacing {
+    @apply space-y-4;
+  }
+
+  /* Mobile-optimized text sizes */
+  .mobile-text-sm {
+    @apply text-sm leading-relaxed;
+  }
+
+  .mobile-text-base {
+    @apply text-base leading-relaxed;
+  }
+}
+
+/* Tablet optimizations */
+@media (min-width: 768px) and (max-width: 1024px) {
+  /* Tablet-specific adjustments */
+  .tablet-grid {
+    @apply grid grid-cols-2 gap-4;
+  }
+
+  .tablet-text {
+    @apply text-lg;
+  }
+}
+
 /* Focus Styles */
 button:focus,
 input:focus,
@@ -91,4 +166,36 @@ textarea:focus,
 select:focus {
   outline: none;
   box-shadow: 0 0 0 2px var(--vintage-color), 0 0 0 4px rgba(139, 69, 19, 0.2);
+}
+
+/* Improved mobile scrolling */
+@media (max-width: 768px) {
+  body {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Prevent horizontal scroll */
+  html, body {
+    overflow-x: hidden;
+  }
+}
+
+/* Mobile navigation improvements */
+@media (max-width: 768px) {
+  .mobile-nav {
+    @apply fixed inset-x-0 bottom-0 z-50 bg-white border-t border-gray-200 shadow-lg flex;
+  }
+
+  .mobile-nav-item {
+    @apply flex-1 text-center py-2 px-1 text-xs;
+  }
+}
+
+/* Loading states for mobile */
+@media (max-width: 768px) {
+  .loading-spinner {
+    width: 32px;
+    height: 32px;
+  }
 }

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
+import { formatOrderTimestamp } from '../utils/datetime';
 
 const ProfilePage = () => {
   const { state, actions } = useApp();
@@ -94,13 +95,57 @@ const ProfilePage = () => {
                     <div key={order.id} className="border border-gray-200 p-6 rounded-lg">
                       <div className="flex justify-between items-center mb-4">
                         <div>
-                          <div className="font-bold text-gray-800">Order #{order.id}</div>
+                          <div className="font-bold text-gray-800">Order #{order.order_number || order.id}</div>
                           <div className="text-sm text-gray-500">
-                            {new Date(order.created_at).toLocaleDateString()}
+                            <span title={new Date(order.created_at).toLocaleString('en-IN', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                              second: '2-digit',
+                              hour12: true
+                            })}>
+                              {formatOrderTimestamp(order.created_at)}
+                            </span>
+                            {order.updated_at && new Date(order.updated_at).getTime() !== new Date(order.created_at).getTime() && (
+                              <span className="ml-2 text-xs text-gray-400">
+                                (Updated {formatOrderTimestamp(order.updated_at)})
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-xs text-gray-400">
+                            Status: <span className={`font-semibold ${
+                              order.status === 'delivered' ? 'text-green-600' :
+                              order.status === 'shipped' ? 'text-blue-600' :
+                              order.status === 'processing' ? 'text-yellow-600' :
+                              order.status === 'cancelled' ? 'text-red-600' :
+                              'text-gray-600'
+                            }`}>
+                              {order.status
+                                ? `${order.status.charAt(0).toUpperCase()}${order.status.slice(1)}`
+                                : 'Unknown'}
+                            </span>
+                            {order.shipped_at && (
+                              <span className="ml-2 text-blue-500">
+                                • Shipped {formatOrderTimestamp(order.shipped_at)}
+                              </span>
+                            )}
+                            {order.delivered_at && (
+                              <span className="ml-2 text-green-500">
+                                • Delivered {formatOrderTimestamp(order.delivered_at)}
+                              </span>
+                            )}
                           </div>
                         </div>
-                        <div className="font-bold text-lg text-vintage-600">
-                          ₹{Number(order.total_amount ?? order.total_price ?? 0).toFixed(2)}
+                        <div className="text-right">
+                          <div className="font-bold text-lg text-vintage-600">
+                            ₹{Number(order.total_amount ?? order.total_price ?? 0).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            {order.payment_status === 'completed' ? 'Paid' : `Payment ${order.payment_status || 'pending'}`}
+                          </div>
                         </div>
                       </div>
                       <div>
