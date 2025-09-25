@@ -1,23 +1,36 @@
 from rest_framework import generics, status, viewsets
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.conf import settings
-import requests
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse, JsonResponse
+from django.utils.decorators import method_decorator
+from decimal import Decimal
+import razorpay
 import json
-from .models import Order, OrderItem
+import hmac
+import hashlib
 from .serializers import (
     OrderSerializer,
     CreateOrderSerializer,
     PaymentVerificationSerializer
 )
 from apps.cart.models import Cart
+from .models import Order, OrderItem
 
 class OrderViewSet(viewsets.ModelViewSet):
-    """Order viewset with Rupay payment integration."""
+    """Order viewset with Razorpay payment integration."""
     permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize Razorpay client
+        self.razorpay_client = razorpay.Client(
+            auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET)
+        )
 
     def get_queryset(self):
         return Order.objects.filter(user=self.request.user)
@@ -27,125 +40,148 @@ class OrderViewSet(viewsets.ModelViewSet):
             return CreateOrderSerializer
         return OrderSerializer
 
-    def create(self, request, *args, **kwargs):
-        """Create new order with Rupay payment integration."""
-        serializer = CreateOrderSerializer(
-            data=request.data,
-            context={'request': request}
-        )
-        serializer.is_valid(raise_exception=True)
+    @action(detail=False, methods=['post'])
+    def create_razorpay_order(self, request):
+        """Create Razorpay order for payment."""
+        try:
+            # Get cart total
+            cart = Cart.objects.get(user=request.user)
+            if not cart.items.exists():
+                return Response(
+                    {'error': 'Cart is empty'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-        # Create order
-        order = serializer.save()
+            # Calculate totals
+            subtotal = cart.total_price
+            tax_amount = subtotal * Decimal('0.18')  # 18% GST
+            shipping_amount = Decimal('50') if subtotal < Decimal('1000') else Decimal('0')  # Free shipping over ₹1000
+            total_amount = subtotal + tax_amount + shipping_amount
 
-        # Update order status based on payment status
-        if order.payment_status == 'completed':
-            order.status = 'processing'
+            # Convert to paise (Razorpay expects amount in smallest currency unit)
+            amount_in_paise = int(total_amount * Decimal('100'))
 
-        order.save()
+            # Create Razorpay order
+            razorpay_order_data = {
+                'amount': amount_in_paise,
+                'currency': 'INR',
+                'receipt': f'order_{request.user.id}_{int(cart.created_at.timestamp())}',
+                'notes': {
+                    'user_id': request.user.id,
+                    'cart_id': cart.id,
+                    'subtotal': str(subtotal),
+                    'tax_amount': str(tax_amount),
+                    'shipping_amount': str(shipping_amount)
+                }
+            }
 
-        return Response(
-            OrderSerializer(order).data,
-            status=status.HTTP_201_CREATED
-        )
+            razorpay_order = self.razorpay_client.order.create(data=razorpay_order_data)
+
+            return Response({
+                'razorpay_order_id': razorpay_order['id'],
+                'amount': razorpay_order['amount'],
+                'currency': razorpay_order['currency'],
+                'receipt': razorpay_order['receipt'],
+                'key': settings.RAZORPAY_KEY_ID,
+                'order_details': {
+                    'subtotal': subtotal,
+                    'tax_amount': tax_amount,
+                    'shipping_amount': shipping_amount,
+                    'total_amount': total_amount
+                }
+            })
+
+        except Cart.DoesNotExist:
+            return Response(
+                {'error': 'Cart not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to create Razorpay order: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
     @action(detail=False, methods=['post'])
     def verify_payment(self, request):
-        """Verify Rupay payment status."""
-        serializer = PaymentVerificationSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-
-        transaction_id = serializer.validated_data['transaction_id']
-        order_id = serializer.validated_data['order_id']
-
+        """Verify Razorpay payment status."""
         try:
-            order = Order.objects.get(id=order_id, user=request.user)
+            razorpay_order_id = request.data.get('razorpay_order_id')
+            razorpay_payment_id = request.data.get('razorpay_signature')
 
-            # Integrate with Rupay gateway for verification
-            verification_result = self._verify_rupay_payment(transaction_id, order)
+            if not all([razorpay_order_id, razorpay_payment_id]):
+                return Response(
+                    {'error': 'Missing required payment verification data'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
-            if verification_result['success']:
+            # Get order by Razorpay order ID
+            try:
+                order = Order.objects.get(razorpay_order_id=razorpay_order_id, user=request.user)
+            except Order.DoesNotExist:
+                return Response(
+                    {'error': 'Order not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Verify payment signature
+            is_valid_signature = self._verify_razorpay_signature(
+                razorpay_order_id, razorpay_payment_id, request.data.get('razorpay_signature')
+            )
+
+            if not is_valid_signature:
+                order.payment_status = 'failed'
+                order.save()
+                return Response(
+                    {'error': 'Invalid payment signature'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Fetch payment details from Razorpay
+            payment_data = self.razorpay_client.payment.fetch(razorpay_payment_id)
+
+            # Update order with payment details
+            order.razorpay_payment_id = razorpay_payment_id
+            order.razorpay_signature = request.data.get('razorpay_signature')
+            order.payment_gateway_response = payment_data
+
+            if payment_data['status'] == 'captured':
                 order.payment_status = 'completed'
                 order.status = 'processing'
-                order.save()
-
-                return Response({
-                    'status': 'success',
-                    'message': 'Payment verified successfully',
-                    'order_status': order.status,
-                    'payment_status': order.payment_status
-                })
+            elif payment_data['status'] == 'failed':
+                order.payment_status = 'failed'
             else:
-                return Response({
-                    'status': 'error',
-                    'message': verification_result['message']
-                }, status=status.HTTP_400_BAD_REQUEST)
+                order.payment_status = 'pending'
 
-        except Order.DoesNotExist:
+            order.save()
+
+            return Response({
+                'status': 'success',
+                'message': 'Payment verified successfully',
+                'order_status': order.status,
+                'payment_status': order.payment_status,
+                'payment_data': payment_data
+            })
+
+        except Exception as e:
             return Response(
-                {'error': 'Order not found'},
-                status=status.HTTP_404_NOT_FOUND
+                {'error': f'Payment verification failed: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    def _verify_rupay_payment(self, transaction_id, order):
-        """Verify payment with Rupay gateway."""
+    def _verify_razorpay_signature(self, order_id, payment_id, signature):
+        """Verify Razorpay webhook signature."""
         try:
-            # Rupay gateway verification endpoint
-            rupay_gateway_url = getattr(settings, 'RUPAY_GATEWAY_URL', 'https://test-rupay.gateway.com')
+            # Create expected signature
+            expected_signature = hmac.new(
+                settings.RAZORPAY_KEY_SECRET.encode(),
+                f"{order_id}|{payment_id}".encode(),
+                hashlib.sha256
+            ).hexdigest()
 
-            # Prepare verification request
-            verification_data = {
-                'transaction_id': transaction_id,
-                'merchant_id': getattr(settings, 'RUPAY_MERCHANT_ID', 'demo_merchant'),
-                'order_id': order.order_number,
-                'amount': str(order.total_amount)
-            }
-
-            # Make request to Rupay gateway
-            response = requests.post(
-                f'{rupay_gateway_url}/verify',
-                json=verification_data,
-                headers={
-                    'Content-Type': 'application/json',
-                    'X-API-Key': getattr(settings, 'RUPAY_API_KEY', 'demo_key')
-                },
-                timeout=30
-            )
-
-            if response.status_code == 200:
-                verification_response = response.json()
-
-                # Store gateway response
-                order.payment_gateway_response = verification_response
-                order.save()
-
-                return {
-                    'success': True,
-                    'data': verification_response
-                }
-            else:
-                return {
-                    'success': False,
-                    'message': f'Gateway verification failed: {response.status_code}'
-                }
-
-        except requests.RequestException as e:
-            # For demo purposes, simulate successful verification
-            if settings.DEBUG:
-                return {
-                    'success': True,
-                    'data': {
-                        'transaction_id': transaction_id,
-                        'status': 'success',
-                        'amount': str(order.total_amount),
-                        'currency': 'INR'
-                    }
-                }
-
-            return {
-                'success': False,
-                'message': f'Gateway connection error: {str(e)}'
-            }
+            return expected_signature == signature
+        except Exception:
+            return False
 
     @action(detail=False, methods=['post'])
     def create_from_cart(self, request):
@@ -166,8 +202,8 @@ class OrderViewSet(viewsets.ModelViewSet):
 
         # Calculate totals
         subtotal = cart.total_price
-        tax_amount = subtotal * 0.18  # 18% GST
-        shipping_amount = 50 if subtotal < 1000 else 0  # Free shipping over ₹1000
+        tax_amount = subtotal * Decimal('0.18')  # 18% GST
+        shipping_amount = Decimal('50') if subtotal < Decimal('1000') else Decimal('0')  # Free shipping over ₹1000
         total_amount = subtotal + tax_amount + shipping_amount
 
         # Prepare order data
@@ -217,33 +253,118 @@ class LegacyOrderViews:
         payment_method = request.data.get('payment_method', 'rupay')
 
         if payment_method == 'rupay':
-            return Response({
+            return JsonResponse({
                 'client_secret': 'rupay_mock_client_secret',
                 'payment_intent_id': f'rupay_pi_{request.user.id}',
                 'gateway': 'rupay'
             })
 
-        return Response({
+        return JsonResponse({
             'client_secret': 'mock_client_secret',
             'payment_intent_id': 'mock_payment_intent'
         })
 
     @staticmethod
     def confirm_payment(request):
-        """Confirm payment and update order status."""
-        order_number = request.data.get('order_number')
-        payment_intent_id = request.data.get('payment_intent_id')
-
+        """Confirm payment completion."""
         try:
-            order = Order.objects.get(order_number=order_number, user=request.user)
+            payment_id = request.data.get('payment_id')
+            order_id = request.data.get('order_id')
+
+            if not payment_id or not order_id:
+                return JsonResponse(
+                    {'error': 'Missing payment_id or order_id'},
+                    status=400
+                )
+
+            # Get order by ID
+            try:
+                order = Order.objects.get(id=order_id, user=request.user)
+            except Order.DoesNotExist:
+                return JsonResponse(
+                    {'error': 'Order not found'},
+                    status=404
+                )
+
+            # Update order status
             order.payment_status = 'completed'
             order.status = 'processing'
-            order.payment_id = payment_intent_id
             order.save()
 
-            return Response({'message': 'Payment confirmed'})
-        except Order.DoesNotExist:
-            return Response(
-                {'error': 'Order not found'},
-                status=status.HTTP_404_NOT_FOUND
+            return JsonResponse({
+                'status': 'success',
+                'message': 'Payment confirmed successfully',
+                'order_id': order.id,
+                'order_status': order.status,
+                'payment_status': order.payment_status
+            })
+
+        except Exception as e:
+            return JsonResponse(
+                {'error': f'Payment confirmation failed: {str(e)}'},
+                status=500
             )
+
+    @staticmethod
+    @method_decorator(csrf_exempt)
+    def razorpay_webhook(request):
+        """Handle Razorpay webhook events."""
+        if request.method != 'POST':
+            return HttpResponse('Method not allowed', status=405)
+
+        try:
+            # Get the webhook payload
+            payload = json.loads(request.body.decode('utf-8'))
+
+            # Verify webhook signature
+            received_signature = request.META.get('HTTP_X_RAZORPAY_SIGNATURE', '')
+            expected_signature = hmac.new(
+                settings.RAZORPAY_WEBHOOK_SECRET.encode(),
+                request.body,
+                hashlib.sha256
+            ).hexdigest()
+
+            if not hmac.compare_digest(expected_signature, received_signature):
+                return HttpResponse('Invalid signature', status=400)
+
+            # Process webhook event
+            event_type = payload.get('event')
+            payment_data = payload.get('payload', {}).get('payment', {})
+
+            if event_type == 'payment.captured':
+                # Payment successful
+                razorpay_payment_id = payment_data.get('entity', {}).get('id')
+                if razorpay_payment_id:
+                    try:
+                        order = Order.objects.get(razorpay_payment_id=razorpay_payment_id)
+                        order.payment_status = 'completed'
+                        order.status = 'processing'
+                        order.payment_gateway_response = payment_data
+                        order.save()
+
+                        # Clear user's cart
+                        try:
+                            cart = Cart.objects.get(user=order.user)
+                            cart.items.all().delete()
+                        except Cart.DoesNotExist:
+                            pass
+
+                    except Order.DoesNotExist:
+                        pass  # Order not found, might be a duplicate webhook
+
+            elif event_type == 'payment.failed':
+                # Payment failed
+                razorpay_payment_id = payment_data.get('entity', {}).get('id')
+                if razorpay_payment_id:
+                    try:
+                        order = Order.objects.get(razorpay_payment_id=razorpay_payment_id)
+                        order.payment_status = 'failed'
+                        order.payment_gateway_response = payment_data
+                        order.save()
+                    except Order.DoesNotExist:
+                        pass
+
+            return HttpResponse('Webhook processed successfully', status=200)
+
+        except Exception as e:
+            return HttpResponse(f'Webhook processing error: {str(e)}', status=500)

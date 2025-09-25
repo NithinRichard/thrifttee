@@ -40,6 +40,27 @@ api.interceptors.response.use(
 );
 
 class ApiService {
+  // Generic HTTP methods for flexibility
+  async post(endpoint, data = {}) {
+    const response = await api.post(endpoint, data);
+    return response.data;
+  }
+
+  async get(endpoint, params = {}) {
+    const response = await api.get(endpoint, { params });
+    return response.data;
+  }
+
+  async put(endpoint, data = {}) {
+    const response = await api.put(endpoint, data);
+    return response.data;
+  }
+
+  async delete(endpoint) {
+    const response = await api.delete(endpoint);
+    return response.data;
+  }
+
   // Products
   async getProducts(params = {}) {
     const response = await api.get('/products/tshirts/', { params });

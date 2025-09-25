@@ -54,7 +54,7 @@ const ProductCard = ({ product }) => {
           <img
             src={(product.primary_image || (product.all_images && product.all_images[0])) || DEFAULT_PRODUCT_IMAGE}
             alt={product.title}
-            className="w-full h-48 object-cover hover:scale-105 transition-transform duration-300"
+            className="w-full h-64 object-cover object-center hover:scale-105 transition-transform duration-300"
           />
 
           {/* Overlay for quick actions */}

@@ -5,6 +5,7 @@ import { AppProvider } from './contexts/AppContext';
 import { ToastProvider } from './contexts/ToastContext';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
+import RazorpayLoader from './components/common/RazorpayLoader';
 import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';

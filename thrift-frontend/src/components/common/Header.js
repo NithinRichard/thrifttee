@@ -43,7 +43,7 @@ const Header = () => {
           {/* Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
             <Link 
-              to="/products" 
+              to="/products"
               className="text-gray-700 hover:text-vintage-600 transition-colors"
             >
               Shop
@@ -52,17 +52,17 @@ const Header = () => {
             {state.isAuthenticated ? (
               <>
                 <Link
-                  to="/cart"
-                  className="text-gray-700 hover:text-vintage-600 transition-colors"
-                >
-                  Cart ({state.cartCount})
-                </Link>
-                <Link
                   to="/profile"
                   className="text-gray-700 hover:text-vintage-600 transition-colors"
                 >
                   Profile
                 </Link>
+                {/* <Link
+                  to="/orders"
+                  className="text-gray-700 hover:text-vintage-600 transition-colors"
+                >
+                  Orders
+                </Link> */}
                 <button
                   onClick={handleLogout}
                   className="text-gray-700 hover:text-vintage-600 transition-colors"
@@ -90,7 +90,6 @@ const Header = () => {
             {state.isAuthenticated && <WishlistIcon />}
             <CartIcon />
           </nav>
-
           {/* Mobile menu button */}
           <button
             className="md:hidden p-2"

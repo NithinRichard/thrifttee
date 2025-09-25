@@ -125,7 +125,7 @@ const WishlistPage = () => {
                       <img
                         src={item.primary_image || item.image || DEFAULT_PRODUCT_IMAGE}
                         alt={item.title}
-                        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-64 object-cover object-center group-hover:scale-105 transition-transform duration-300"
                       />
                     </Link>
                     <button

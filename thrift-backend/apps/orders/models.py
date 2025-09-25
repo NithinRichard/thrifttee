@@ -23,7 +23,7 @@ class Order(models.Model):
     ]
 
     PAYMENT_METHOD_CHOICES = [
-        ('rupay', 'Rupay'),
+        ('razorpay', 'Razorpay'),
         ('card', 'Credit/Debit Card'),
         ('upi', 'UPI'),
         ('netbanking', 'Net Banking'),
@@ -54,12 +54,12 @@ class Order(models.Model):
     shipping_country = models.CharField(max_length=100, default='India')
 
     # Payment Information
-    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, default='rupay')
+    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHOD_CHOICES, default='razorpay')
 
-    # Rupay specific fields
-    payment_token = models.CharField(max_length=100, blank=True, null=True)  # From Rupay gateway
-    transaction_id = models.CharField(max_length=100, blank=True, null=True)  # Rupay transaction ID
-    auth_code = models.CharField(max_length=50, blank=True, null=True)  # Authorization code
+    # Razorpay specific fields
+    razorpay_order_id = models.CharField(max_length=100, blank=True, null=True)  # Razorpay order ID
+    razorpay_payment_id = models.CharField(max_length=100, blank=True, null=True)  # Razorpay payment ID
+    razorpay_signature = models.CharField(max_length=500, blank=True, null=True)  # Payment signature
     payment_gateway_response = models.JSONField(blank=True, null=True)  # Store full gateway response
 
     # Legacy payment fields (keeping for backward compatibility)

@@ -1,6 +1,20 @@
 import os
 from pathlib import Path
 
+# Load environment variables from .env file manually
+def load_env_file():
+    env_file = '.env'
+    if os.path.exists(env_file):
+        with open(env_file, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key] = value
+
+# Load environment variables
+load_env_file()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = 'django-insecure-change-this-in-production-12345'
@@ -133,11 +147,10 @@ CORS_ALLOWED_ORIGINS = [
 
 CORS_ALLOW_CREDENTIALS = True
 
-# Rupay Payment Gateway Configuration
-RUPAY_GATEWAY_URL = os.getenv('RUPAY_GATEWAY_URL', 'https://test-rupay.gateway.com')
-RUPAY_MERCHANT_ID = os.getenv('RUPAY_MERCHANT_ID', 'demo_merchant_id')
-RUPAY_TERMINAL_ID = os.getenv('RUPAY_TERMINAL_ID', 'demo_terminal_id')
-RUPAY_API_KEY = os.getenv('RUPAY_API_KEY', 'demo_api_key')
+# Razorpay Payment Gateway Configuration
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_demo_key_id')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'demo_secret_key')
+RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', 'demo_webhook_secret')
 
 # Payment Settings
 PAYMENT_CURRENCY = 'INR'

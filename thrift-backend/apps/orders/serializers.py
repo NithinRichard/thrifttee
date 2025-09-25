@@ -21,7 +21,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order_number', 'status', 'payment_status', 'subtotal',
             'tax_amount', 'shipping_amount', 'total_amount', 'items',
-            'payment_method', 'payment_token', 'transaction_id', 'auth_code',
+            'payment_method', 'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature',
             'currency', 'notes', 'payment_gateway_response',
             'shipping_name', 'shipping_email', 'shipping_phone',
             'shipping_address_line1', 'shipping_address_line2',
@@ -61,7 +61,7 @@ class CreateOrderSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'customer_info', 'order_items', 'payment_method',
-            'payment_token', 'payment_status', 'transaction_details',
+            'razorpay_order_id', 'razorpay_payment_id', 'razorpay_signature', 'payment_status', 'transaction_details',
             'currency', 'notes', 'subtotal', 'tax_amount',
             'shipping_amount', 'total_amount', 'shipping_address'
         ]
@@ -168,11 +168,12 @@ class CreateOrderSerializer(serializers.ModelSerializer):
             shipping_city=shipping_city,
             shipping_state=shipping_state,
             shipping_postal_code=shipping_postal_code,
-            payment_method=validated_data.get('payment_method', 'rupay'),
-            payment_token=validated_data.get('payment_token', ''),
+            payment_method=validated_data.get('payment_method', 'razorpay'),
+            razorpay_order_id=validated_data.get('razorpay_order_id', ''),
+            razorpay_payment_id=validated_data.get('razorpay_payment_id', ''),
+            razorpay_signature=validated_data.get('razorpay_signature', ''),
             payment_status=validated_data.get('payment_status', 'pending'),
             transaction_id=transaction_details.get('transaction_id', ''),
-            auth_code=transaction_details.get('auth_code', ''),
             currency=validated_data.get('currency', 'INR'),
             subtotal=subtotal,
             tax_amount=tax_amount,
