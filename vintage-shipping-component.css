@@ -1,0 +1,182 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Amatic+SC:wght@400;700&family=Crimson+Text:wght@400;600&display=swap');
+
+.vintage-shipping-container {
+  font-family: 'Crimson Text', serif;
+  background: #F8F6F0;
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(139, 115, 85, 0.15);
+}
+
+.vintage-shipping-title {
+  font-family: 'Amatic SC', cursive;
+  font-size: 2.5rem;
+  color: #2C2C2C;
+  text-align: center;
+  margin-bottom: 1.5rem;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+.shipping-methods-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.shipping-method-card {
+  background: #FEFCF7;
+  border: 2px solid #8B7355;
+  border-radius: 4px;
+  padding: 1.5rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  box-shadow: 2px 2px 6px rgba(139, 115, 85, 0.2);
+}
+
+.shipping-method-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 4px 4px 12px rgba(139, 115, 85, 0.3);
+}
+
+.shipping-method-card.selected {
+  background: #F0EDE5;
+  border-color: #D4AF37;
+  box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.3);
+}
+
+.shipping-method-card.selected::after {
+  content: "SELECTED";
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  background: #D4AF37;
+  color: #2C2C2C;
+  font-family: 'Courier Prime', monospace;
+  font-weight: 700;
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  border-radius: 2px;
+  transform: rotate(15deg);
+  box-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+}
+
+.method-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.method-name {
+  font-family: 'Courier Prime', monospace;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #2C2C2C;
+  margin: 0;
+}
+
+.method-price {
+  font-family: 'Courier Prime', monospace;
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #8B7355;
+  background: #F8F6F0;
+  padding: 4px 8px;
+  border: 1px solid #8B7355;
+  border-radius: 2px;
+  position: relative;
+}
+
+.method-price::before {
+  content: "₹";
+  font-size: 0.9rem;
+}
+
+.method-description {
+  font-family: 'Crimson Text', serif;
+  color: #5A5A5A;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+
+.method-timing {
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.8rem;
+  color: #8B7355;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.method-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.shipping-summary {
+  background: #F0EDE5;
+  border: 2px dashed #8B7355;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.summary-title {
+  font-family: 'Amatic SC', cursive;
+  font-size: 1.5rem;
+  color: #2C2C2C;
+  margin: 0 0 0.5rem 0;
+}
+
+.summary-details {
+  font-family: 'Courier Prime', monospace;
+  font-size: 0.9rem;
+  color: #5A5A5A;
+}
+
+.loading-animation {
+  font-family: 'Courier Prime', monospace;
+  color: #8B7355;
+  text-align: center;
+  padding: 1rem;
+}
+
+.loading-animation::after {
+  content: "";
+  animation: typewriter 1.5s infinite;
+}
+
+@keyframes typewriter {
+  0%, 50% { content: "Calculating..."; }
+  51%, 100% { content: "Calculating"; }
+}
+
+.vintage-radio {
+  appearance: none;
+  width: 20px;
+  height: 20px;
+  border: 2px solid #8B7355;
+  border-radius: 50%;
+  background: #FEFCF7;
+  position: relative;
+  cursor: pointer;
+}
+
+.vintage-radio:checked {
+  background: #D4AF37;
+  border-color: #D4AF37;
+}
+
+.vintage-radio:checked::after {
+  content: "✓";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: #2C2C2C;
+  font-size: 12px;
+  font-weight: bold;
+}

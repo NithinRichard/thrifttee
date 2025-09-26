@@ -1,0 +1,160 @@
+.vintage-shipping-container {
+  font-family: Georgia, serif;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.vintage-shipping-title {
+  font-family: Georgia, serif;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #1f2937;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.shipping-methods-grid {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.shipping-method-card {
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.shipping-method-card:hover {
+  border-color: #9ca3af;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.shipping-method-card.selected {
+  background: #faf7f0;
+  border-color: #c1935e;
+  box-shadow: 0 0 0 3px rgba(193, 147, 94, 0.1);
+}
+
+.method-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.method-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
+}
+
+.method-price {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #c1935e;
+  background: #faf7f0;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #e8d9c2;
+  border-radius: 0.25rem;
+}
+
+
+
+.method-description {
+  color: #6b7280;
+  font-size: 0.875rem;
+  margin: 0.5rem 0;
+  line-height: 1.4;
+}
+
+.method-timing {
+  font-size: 0.75rem;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.method-icon {
+  width: 16px;
+  height: 16px;
+  opacity: 0.7;
+}
+
+.shipping-summary {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.summary-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 0.5rem 0;
+}
+
+.summary-details {
+  font-size: 0.875rem;
+  color: #6b7280;
+}
+
+.loading-animation {
+  color: #9ca3af;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.loading-animation::after {
+  content: "...";
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.vintage-radio {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 50%;
+  background: white;
+  position: relative;
+  cursor: pointer;
+  margin-right: 0.5rem;
+}
+
+.vintage-radio:focus-visible {
+  outline: 2px solid #c1935e;
+  outline-offset: 2px;
+}
+
+.vintage-radio:checked {
+  background: #c1935e;
+  border-color: #c1935e;
+}
+
+.vintage-radio:checked::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: white;
+}

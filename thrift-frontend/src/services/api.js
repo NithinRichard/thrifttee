@@ -290,6 +290,27 @@ class ApiService {
       throw error;
     }
   }
+
+  // Shipping Calculator
+  async calculateShipping(shippingData) {
+    const response = await this.post('/products/shipping/calculate/', shippingData);
+    return response;
+  }
+
+  async getShippingMethods() {
+    const response = await this.get('/products/shipping/methods/');
+    return response;
+  }
+
+  async getShippingZones() {
+    const response = await this.get('/products/shipping/zones/');
+    return response;
+  }
+
+  async getShippingRates() {
+    const response = await this.get('/products/shipping/rates/');
+    return response;
+  }
 }
 
 export default new ApiService();

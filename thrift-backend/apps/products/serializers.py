@@ -26,7 +26,7 @@ class TShirtListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'brand', 'category', 'size', 'color',
             'condition', 'price', 'original_price', 'discount_percentage',
-            'primary_image', 'is_featured', 'created_at'
+            'primary_image', 'is_featured', 'quantity', 'created_at'
         ]
 
 class TShirtDetailSerializer(serializers.ModelSerializer):
@@ -34,9 +34,12 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
     brand = BrandSerializer(read_only=True)
     category = CategorySerializer(read_only=True)
     all_images = serializers.SerializerMethodField()
+    condition_photos = serializers.SerializerMethodField()
     discount_percentage = serializers.ReadOnlyField()
     reviews_count = serializers.SerializerMethodField()
     average_rating = serializers.SerializerMethodField()
+    has_detailed_condition_info = serializers.ReadOnlyField()
+    condition_badge_class = serializers.ReadOnlyField()
     
     class Meta:
         model = TShirt
@@ -44,8 +47,15 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'description', 'brand', 'category',
             'size', 'color', 'material', 'gender', 'condition', 'price',
             'original_price', 'discount_percentage', 'quantity', 'is_available',
-            'is_featured', 'meta_description', 'tags', 'all_images',
-            'reviews_count', 'average_rating', 'created_at', 'updated_at'
+            'is_featured', 'meta_description', 'tags', 'all_images', 'condition_photos',
+            'reviews_count', 'average_rating', 'has_detailed_condition_info',
+            'condition_badge_class', 'created_at', 'updated_at',
+            # Enhanced Condition Fields
+            'condition_notes', 'has_stains', 'has_holes', 'has_fading',
+            'has_pilling', 'has_repairs', 'condition_confidence',
+            'pit_to_pit', 'shoulder_to_shoulder', 'front_length', 'back_length',
+            'sleeve_length', 'weight_grams', 'condition_verified',
+            'condition_verifier', 'condition_verified_at'
         ]
     
     def get_reviews_count(self, obj):
@@ -60,6 +70,10 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
     def get_all_images(self, obj):
         request = self.context.get('request')
         image_fields = [obj.primary_image, obj.image_2, obj.image_3, obj.image_4]
+        # Add condition photos
+        condition_photos = [obj.condition_photo_1, obj.condition_photo_2, obj.condition_photo_3, obj.condition_photo_4]
+        image_fields.extend([img for img in condition_photos if img])
+        
         urls = []
         for img in image_fields:
             if img:
@@ -71,6 +85,31 @@ class TShirtDetailSerializer(serializers.ModelSerializer):
                 except Exception:
                     continue
         return urls
+
+    def get_condition_photos(self, obj):
+        """Return condition-specific photos with descriptions."""
+        request = self.context.get('request')
+        photos = []
+        photo_data = [
+            (obj.condition_photo_1, 'Close-up of any flaws/damage'),
+            (obj.condition_photo_2, 'Care tag/label'),
+            (obj.condition_photo_3, 'Material/fabric close-up'),
+            (obj.condition_photo_4, 'Additional detail photo')
+        ]
+        
+        for img, description in photo_data:
+            if img:
+                try:
+                    url = img.url
+                    if request is not None:
+                        url = request.build_absolute_uri(url)
+                    photos.append({
+                        'url': url,
+                        'description': description
+                    })
+                except Exception:
+                    continue
+        return photos
 
 class TShirtReviewSerializer(serializers.ModelSerializer):
     """Serializer for T-Shirt reviews."""

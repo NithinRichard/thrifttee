@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
+import VintageShippingSelector from '../components/VintageShippingSelector';
 
 const CheckoutPage = () => {
   const { state, actions } = useApp();
@@ -11,17 +11,18 @@ const CheckoutPage = () => {
   const [loading, setLoading] = useState(false);
   const [orderData, setOrderData] = useState(null);
   const [paymentError, setPaymentError] = useState('');
+  const [shippingCost, setShippingCost] = useState(0);
 
   const [isCheckingOrder, setIsCheckingOrder] = useState(false);
 
   useEffect(() => {
-    // Prevent multiple simultaneous calls
+    // Prevent multiple simultaneous calls using a ref instead of state
     if (isCheckingOrder) return;
 
     // Check for pending order first, regardless of authentication state
     setIsCheckingOrder(true);
     checkForExistingOrder();
-  }, [navigate, isCheckingOrder]);
+  }, [navigate]); // Remove isCheckingOrder from dependencies to prevent infinite loop
 
   const checkForExistingOrder = async () => {
     try {
@@ -301,10 +302,19 @@ const CheckoutPage = () => {
   const calculateTotals = () => {
     const subtotal = state.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     const taxAmount = subtotal * 0.18; // 18% GST
-    const shippingAmount = subtotal >= 1000 ? 0 : 50; // Free shipping over ₹1000
-    const total = subtotal + taxAmount + shippingAmount;
+    const total = subtotal + taxAmount + shippingCost;
 
-    return { subtotal, taxAmount, shippingAmount, total };
+    return { subtotal, taxAmount, shippingCost, total };
+  };
+
+  const [selectedShipping, setSelectedShipping] = useState(null);
+
+  const handleShippingSelect = (method) => {
+    setSelectedShipping(method);
+  };
+
+  const handleShippingCostUpdate = (cost) => {
+    setShippingCost(cost);
   };
 
   if (loading) {
@@ -338,12 +348,32 @@ const CheckoutPage = () => {
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            {/* Shipping Calculator */}
+            <motion.div
+              initial={{ opacity: 0, y: 30 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.1 }}
+              className="lg:col-span-1"
+            >
+              <VintageShippingSelector
+                cartItems={state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))}
+                shippingAddress={{
+                  postal_code: "687767",
+                  state: "KL",
+                  country: "IN"
+                }}
+                onShippingSelect={handleShippingSelect}
+                onShippingCostUpdate={handleShippingCostUpdate}
+              />
+            </motion.div>
+
             {/* Order Summary */}
             <motion.div
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
+              className="lg:col-span-1"
             >
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-vintage font-bold text-gray-900 mb-6">
@@ -385,7 +415,7 @@ const CheckoutPage = () => {
                   <div className="flex justify-between">
                     <span className="text-gray-600">Shipping</span>
                     <span className="font-semibold">
-                      {shippingAmount === 0 ? 'Free' : `₹${shippingAmount.toFixed(2)}`}
+                      {shippingCost === 0 ? 'Free' : `₹${shippingCost.toFixed(2)}`}
                     </span>
                   </div>
                   <div className="border-t border-gray-200 pt-2">
@@ -403,6 +433,7 @@ const CheckoutPage = () => {
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
+              className="lg:col-span-1"
             >
               <div className="bg-white p-6 rounded-lg shadow-lg">
                 <h2 className="text-2xl font-vintage font-bold text-gray-900 mb-6">

@@ -1,11 +1,13 @@
 from rest_framework import generics, filters, status
 from rest_framework.decorators import api_view, permission_classes
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q, Avg, Min, Max
 from django.db import models
-from .models import TShirt, Brand, Category, TShirtReview
+from .models import TShirt, Brand, Category, TShirtReview, ShippingZone, ShippingMethod, ShippingRate, ShippingCalculator
 from .serializers import (
     TShirtListSerializer, TShirtDetailSerializer, BrandSerializer,
     CategorySerializer, TShirtReviewSerializer
@@ -92,9 +94,6 @@ def filter_options(request):
     """API endpoint to get all available filter options."""
     brands = Brand.objects.all().values('id', 'name')
     categories = Category.objects.all().values('id', 'name')
-    sizes = TShirt.objects.values_list('size', flat=True).distinct()
-    colors = TShirt.objects.values_list('color', flat=True).distinct()
-    conditions = TShirt.objects.values_list('condition', flat=True).distinct()
     
     # Get price range
     price_range = TShirt.objects.filter(is_available=True).aggregate(
@@ -102,11 +101,391 @@ def filter_options(request):
         max_price=models.Max('price')
     )
     
+    # Format condition choices with proper labels
+    condition_choices = []
+    for value, label in TShirt.CONDITION_CHOICES:
+        condition_choices.append({'value': value, 'label': label})
+    
+    # Format size choices
+    size_choices = []
+    for value, label in TShirt.SIZE_CHOICES:
+        size_choices.append({'value': value, 'label': label})
+    
+    # Format gender choices
+    gender_choices = []
+    for value, label in TShirt.GENDER_CHOICES:
+        gender_choices.append({'value': value, 'label': label})
+    
     return Response({
         'brands': list(brands),
         'categories': list(categories),
-        'sizes': [{'value': size, 'label': size.upper()} for size in sizes],
-        'colors': [{'value': color, 'label': color.title()} for color in colors],
-        'conditions': [{'value': condition, 'label': condition.replace('_', ' ').title()} for condition in conditions],
-        'price_range': price_range
+        'sizes': size_choices,
+        'conditions': condition_choices,
+        'genders': gender_choices,
+        'price_range': price_range,
+        'boolean_filters': {
+            'is_available': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'is_featured': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'condition_verified': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'has_stains': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'has_holes': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'has_fading': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'has_pilling': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}],
+            'has_repairs': [{'value': True, 'label': 'Yes'}, {'value': False, 'label': 'No'}]
+        },
+        'date_filters': {
+            'created_today': 'Today',
+            'created_week': 'Past 7 days',
+            'created_month': 'This month',
+            'created_year': 'This year'
+        }
     })
+
+
+# Shipping Calculator API Endpoints
+
+@api_view(['POST'])
+@permission_classes([])
+@csrf_exempt
+def calculate_shipping(request):
+    """
+    Calculate shipping cost based on cart items and shipping address.
+    """
+    try:
+        print(f"Request data: {request.data}")  # Debug log
+        
+        items = request.data.get('items', [])
+        shipping_address = request.data.get('shipping_address', {})
+        shipping_method_id = request.data.get('shipping_method_id')
+
+        print(f"Items: {items}, Address: {shipping_address}")  # Debug log
+
+        if not items or not shipping_address:
+            return Response(
+                {'error': 'Items and shipping address are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Get product objects for items
+        order_items = []
+        for item in items:
+            product_id = item.get('product_id')
+            quantity = item.get('quantity')
+            if product_id is None or quantity is None:
+                return Response(
+                    {'error': 'Each item must include product_id and quantity'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            try:
+                product = TShirt.objects.get(id=product_id, is_available=True)
+                order_items.append({
+                    'product': product,
+                    'quantity': quantity
+                })
+            except TShirt.DoesNotExist:
+                error_msg = f'Product {product_id} not found or unavailable'
+                print(f"Product not found error: {error_msg}")  # Debug log
+                return Response(
+                    {'error': error_msg},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+        # Calculate shipping cost
+        result = ShippingCalculator.calculate_shipping_cost(
+            order_items,
+            shipping_address,
+            shipping_method_id
+        )
+
+        print(f"Calculation result: {result}")  # Debug log
+
+        if 'error' in result:
+            return Response(result, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(result)
+
+    except Exception as e:
+        print(f"Exception: {str(e)}")  # Debug log
+        return Response(
+            {'error': f'Shipping calculation failed: {str(e)}'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+def shipping_zones(request):
+    """Get all available shipping zones."""
+    zones = ShippingZone.objects.filter(is_active=True)
+    return Response([{
+        'id': zone.id,
+        'name': zone.name,
+        'description': zone.description,
+        'base_cost': float(zone.base_cost),
+        'free_shipping_threshold': float(zone.free_shipping_threshold) if zone.free_shipping_threshold else None,
+        'countries': zone.countries.split(',') if zone.countries else []
+    } for zone in zones])
+
+
+@api_view(['GET'])
+def shipping_methods(request):
+    """Get all available shipping methods."""
+    methods = ShippingMethod.objects.filter(is_active=True)
+    return Response([{
+        'id': method.id,
+        'name': method.name,
+        'description': method.description,
+        'estimated_days': method.estimated_days,
+        'cost_multiplier': float(method.cost_multiplier),
+        'max_weight_kg': float(method.max_weight_kg) if method.max_weight_kg else None
+    } for method in methods])
+
+
+@api_view(['GET'])
+def shipping_rates(request):
+    """Get all shipping rates for admin purposes."""
+    rates = ShippingRate.objects.filter(is_active=True).select_related('zone', 'method')
+    return Response([{
+        'id': rate.id,
+        'zone': rate.zone.name,
+        'method': rate.method.name,
+        'min_weight_kg': float(rate.min_weight_kg),
+        'max_weight_kg': float(rate.max_weight_kg) if rate.max_weight_kg else None,
+        'base_cost': float(rate.base_cost),
+        'per_kg_cost': float(rate.per_kg_cost),
+        'insurance_rate': float(rate.insurance_rate)
+    } for rate in rates])
+
+
+@api_view(['GET'])
+def product_reviews(request, product_id):
+    """Get reviews for a specific product with sorting."""
+    try:
+        product = TShirt.objects.get(id=product_id, is_available=True)
+    except TShirt.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    reviews = TShirtReview.objects.filter(tshirt=product).select_related('user')
+    
+    # Sorting
+    sort_by = request.GET.get('sort', 'newest')
+    if sort_by == 'oldest':
+        reviews = reviews.order_by('created_at')
+    elif sort_by == 'rating_high':
+        reviews = reviews.order_by('-rating', '-created_at')
+    elif sort_by == 'rating_low':
+        reviews = reviews.order_by('rating', '-created_at')
+    else:  # newest (default)
+        reviews = reviews.order_by('-created_at')
+    
+    # Calculate average rating
+    avg_rating = reviews.aggregate(avg=Avg('rating'))['avg'] or 0
+    
+    review_data = []
+    for review in reviews:
+        review_data.append({
+            'id': review.id,
+            'rating': review.rating,
+            'title': review.title,
+            'comment': review.comment,
+            'reviewer_initials': review.reviewer_initials,
+            'is_verified_purchase': review.is_verified_purchase,
+            'days_since_review': review.days_since_review,
+            'created_at': review.created_at.isoformat()
+        })
+    
+    return Response({
+        'reviews': review_data,
+        'average_rating': round(avg_rating, 1),
+        'total_reviews': len(review_data)
+    })
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def submit_review(request, product_id):
+    """Submit a new review for a product."""
+    try:
+        product = TShirt.objects.get(id=product_id, is_available=True)
+    except TShirt.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=status.HTTP_404_NOT_FOUND)
+    
+    # Check if user already reviewed this product
+    if TShirtReview.objects.filter(tshirt=product, user=request.user).exists():
+        return Response({'error': 'You have already reviewed this product'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    rating = request.data.get('rating')
+    title = request.data.get('title', '').strip()
+    comment = request.data.get('comment', '').strip()
+    
+    if not rating or not title or not comment:
+        return Response({'error': 'Rating, title, and comment are required'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        rating = int(rating)
+        if rating < 1 or rating > 5:
+            raise ValueError
+    except (ValueError, TypeError):
+        return Response({'error': 'Rating must be between 1 and 5'}, status=status.HTTP_400_BAD_REQUEST)
+    
+    review = TShirtReview.objects.create(
+        tshirt=product,
+        user=request.user,
+        rating=rating,
+        title=title,
+        comment=comment,
+        is_verified_purchase=False  # TODO: Check actual purchase history
+    )
+    
+    return Response({
+        'id': review.id,
+        'rating': review.rating,
+        'title': review.title,
+        'comment': review.comment,
+        'reviewer_initials': review.reviewer_initials,
+        'is_verified_purchase': review.is_verified_purchase,
+        'days_since_review': review.days_since_review,
+        'created_at': review.created_at.isoformat()
+    }, status=status.HTTP_201_CREATED)
+
+# Reservation System Views
+from django.utils import timezone
+from datetime import timedelta
+from .models import ProductReservation
+from .utils import get_available_quantity, can_reserve_quantity
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_reservation(request, product_id):
+    try:
+        product = TShirt.objects.get(id=product_id, is_available=True)
+        quantity = request.data.get('quantity', 1)
+        
+        # Validate quantity
+        if quantity < 1:
+            return Response({'error': 'Quantity must be at least 1'}, status=400)
+        
+        # Check if user can reserve this quantity
+        if not can_reserve_quantity(product, request.user, quantity):
+            available = get_available_quantity(product)
+            return Response({
+                'error': f'Only {available} items available for reservation'
+            }, status=400)
+        
+        # Clean up expired reservations first
+        ProductReservation.objects.filter(
+            product=product,
+            is_active=True,
+            expires_at__lte=timezone.now()
+        ).update(is_active=False)
+        
+        # Create or update reservation
+        expires_at = timezone.now() + timedelta(minutes=15)
+        
+        try:
+            # Try to get existing reservation
+            reservation = ProductReservation.objects.get(
+                product=product,
+                user=request.user
+            )
+            # Update existing reservation
+            reservation.quantity = quantity
+            reservation.expires_at = expires_at
+            reservation.is_active = True
+            reservation.extension_count = 0
+            reservation.save()
+        except ProductReservation.DoesNotExist:
+            # Create new reservation
+            reservation = ProductReservation.objects.create(
+                product=product,
+                user=request.user,
+                quantity=quantity,
+                expires_at=expires_at,
+                is_active=True
+            )
+        
+        return Response({
+            'reservation_id': reservation.id,
+            'quantity': reservation.quantity,
+            'expires_at': reservation.expires_at,
+            'time_remaining': reservation.time_remaining
+        })
+        
+    except TShirt.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=404)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def extend_reservation(request, reservation_id):
+    try:
+        reservation = ProductReservation.objects.get(
+            id=reservation_id, 
+            user=request.user,
+            is_active=True
+        )
+        
+        if reservation.extend_reservation():
+            return Response({
+                'expires_at': reservation.expires_at,
+                'time_remaining': reservation.time_remaining,
+                'extensions_used': reservation.extension_count
+            })
+        else:
+            return Response({'error': 'Cannot extend reservation'}, status=400)
+            
+    except ProductReservation.DoesNotExist:
+        return Response({'error': 'Reservation not found'}, status=404)
+
+@api_view(['GET'])
+def check_reservation_status(request, product_id):
+    try:
+        product = TShirt.objects.get(id=product_id)
+        
+        # Clean up expired reservations
+        ProductReservation.objects.filter(
+            product=product,
+            is_active=True,
+            expires_at__lte=timezone.now()
+        ).update(is_active=False)
+        
+        # Check if user has active reservation
+        user_reservation = None
+        if request.user.is_authenticated:
+            try:
+                user_reservation = ProductReservation.objects.get(
+                    product=product,
+                    user=request.user,
+                    is_active=True,
+                    expires_at__gt=timezone.now()
+                )
+            except ProductReservation.DoesNotExist:
+                pass
+        
+        # Get available quantity
+        available_qty = get_available_quantity(product)
+        
+        if user_reservation:
+            return Response({
+                'is_reserved': True,
+                'expires_at': user_reservation.expires_at,
+                'time_remaining': user_reservation.time_remaining,
+                'is_own_reservation': True,
+                'quantity': user_reservation.quantity,
+                'available_quantity': available_qty + user_reservation.quantity,
+                'total_quantity': product.quantity
+            })
+        elif available_qty < product.quantity:
+            return Response({
+                'is_reserved': True,
+                'is_own_reservation': False,
+                'available_quantity': available_qty,
+                'total_quantity': product.quantity
+            })
+        else:
+            return Response({
+                'is_reserved': False,
+                'available_quantity': available_qty,
+                'total_quantity': product.quantity
+            })
+        
+    except TShirt.DoesNotExist:
+        return Response({'error': 'Product not found'}, status=404)
