@@ -173,33 +173,43 @@ const appReducer = (state, action) => {
       return { ...state, filters: action.payload };
     
     case actionTypes.SET_CART:
-      // Normalize cart payload shape from API
       {
         const raw = action.payload;
+
+        if (!raw || (Array.isArray(raw) && raw.length === 0) || (raw?.items && raw.items.length === 0)) {
+          localStorage.removeItem('localCart');
+          return { ...state, cart: [], cartCount: 0, cartTotal: 0 };
+        }
+
         const items = Array.isArray(raw)
           ? raw
           : (raw && Array.isArray(raw.items) ? raw.items : []);
         const cart = items.map((it) => {
           const tshirt = it.tshirt || it.product || {};
-          const unitPrice = typeof it.price === 'number'
-            ? it.price
-            : (tshirt?.price ?? 0);
-
-          // Prefer explicit image on item, else derive from nested tshirt serializer
-          const image = it.image || tshirt.primary_image || (Array.isArray(tshirt.all_images) ? tshirt.all_images[0] : undefined);
+          const cartItemId = it.id ?? it.cart_item_id ?? it.cartItemId ?? null;
+          const productId = tshirt?.id ?? it.product_id ?? it.productId ?? null;
+          const itemPrice = it.tshirt_price ?? it.price ?? tshirt?.price ?? 0;
+          const parsedPrice = typeof itemPrice === 'string' ? parseFloat(itemPrice) : itemPrice;
+          const unitPrice = (typeof parsedPrice === 'number' && parsedPrice > 0)
+            ? parsedPrice
+            : (typeof tshirt?.price === 'number' && tshirt.price > 0 ? tshirt.price : 0);
+          const image = it.tshirt_image ?? it.image ?? tshirt.primary_image ?? (Array.isArray(tshirt.all_images) ? tshirt.all_images[0] : undefined);
 
           return {
             ...it,
-            // Hydrate common fields used by UI components
-            id: it.id ?? tshirt.id ?? it.product_id,
-            title: it.title || tshirt.title,
-            slug: it.slug || tshirt.slug,
-            brand: it.brand || tshirt.brand?.name,
-            size: it.size || tshirt.size,
-            color: it.color || tshirt.color,
+            cartItemId,
+            productId,
+            id: cartItemId ?? productId ?? it.id,
+            title: it.tshirt_title ?? it.title ?? tshirt.title,
+            slug: it.slug ?? tshirt.slug,
+            brand: it.tshirt_brand ?? it.brand ?? tshirt.brand?.name,
+            category: it.tshirt_category ?? tshirt.category?.name,
+            size: it.size ?? tshirt.size,
+            color: it.color ?? tshirt.color,
             image,
             price: unitPrice,
             quantity: it.quantity ?? 1,
+            original_price: it.original_price ?? tshirt.original_price ?? unitPrice,
           };
         });
         const cartCount = cart.reduce((total, item) => total + (item.quantity || 0), 0);
@@ -207,58 +217,113 @@ const appReducer = (state, action) => {
         return { ...state, cart, cartCount, cartTotal };
       }
     
-    case actionTypes.ADD_TO_CART:
-      const newItem = action.payload;
-      const existingItemIndex = state.cart.findIndex(item => item.id === newItem.id);
-      
-      let updatedCart;
-      if (existingItemIndex >= 0) {
-        updatedCart = state.cart.map((item, index) =>
-          index === existingItemIndex
-            ? { ...item, quantity: item.quantity + newItem.quantity }
-            : item
-        );
-      } else {
-        updatedCart = [...state.cart, newItem];
-      }
-      
-      const newCartCount = updatedCart.reduce((total, item) => total + item.quantity, 0);
-      const newCartTotal = updatedCart.reduce((total, item) => total + (item.price * item.quantity), 0);
-      
+    case actionTypes.ADD_TO_CART: {
+      const rawPayload = action.payload;
+
+      const items = Array.isArray(rawPayload)
+        ? rawPayload
+        : (rawPayload && Array.isArray(rawPayload.items) ? rawPayload.items : [rawPayload]);
+
+      const normalized = items
+        .map((entry) => {
+          const tshirt = entry.tshirt || entry.product || {};
+          const cartItemId = entry.id ?? entry.cart_item_id ?? entry.cartItemId ?? null;
+          const productId = entry.product_id ?? entry.productId ?? tshirt?.id ?? null;
+          const unitPrice = typeof entry.price === 'number' && entry.price > 0
+            ? entry.price
+            : (typeof tshirt?.price === 'number' ? tshirt.price : 0);
+
+          if (!cartItemId && !productId) {
+            return null;
+          }
+
+          const existing = state.cart.find(item => {
+            const itemKey = item.cartItemId ?? item.productId ?? item.id;
+            const incomingKey = cartItemId ?? productId;
+            return itemKey === incomingKey;
+          });
+
+          const mergedQuantity = (entry.quantity ?? existing?.quantity ?? 1);
+
+          return {
+            ...(existing || {}),
+            ...entry,
+            cartItemId: cartItemId ?? existing?.cartItemId,
+            productId: productId ?? existing?.productId,
+            id: cartItemId ?? productId ?? existing?.id,
+            title: entry.title || existing?.title || tshirt.title,
+            slug: entry.slug || existing?.slug || tshirt.slug,
+            brand: entry.brand || existing?.brand || tshirt.brand?.name,
+            size: entry.size || existing?.size || tshirt.size,
+            color: entry.color || existing?.color || tshirt.color,
+            image: entry.image || existing?.image || tshirt.primary_image || (Array.isArray(tshirt.all_images) ? tshirt.all_images[0] : undefined),
+            price: unitPrice,
+            quantity: mergedQuantity,
+          };
+        })
+        .filter(Boolean);
+
+      let combinedCart = [...state.cart];
+      normalized.forEach((incoming) => {
+        const key = incoming.cartItemId ?? incoming.productId ?? incoming.id;
+        const idx = combinedCart.findIndex(item => (item.cartItemId ?? item.productId ?? item.id) === key);
+        if (idx >= 0) {
+          combinedCart[idx] = { ...combinedCart[idx], ...incoming };
+        } else {
+          combinedCart.push(incoming);
+        }
+      });
+
+      const newCartCount = combinedCart.reduce((total, item) => total + (item.quantity || 0), 0);
+      const newCartTotal = combinedCart.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0);
+
       return {
         ...state,
-        cart: updatedCart,
+        cart: combinedCart,
         cartCount: newCartCount,
         cartTotal: newCartTotal
       };
-    
-    case actionTypes.UPDATE_CART_ITEM:
+    }
+
+    case actionTypes.UPDATE_CART_ITEM: {
       const { itemId, quantity } = action.payload;
-      const updatedCartItems = state.cart.map(item =>
-        item.id === itemId ? { ...item, quantity } : item
-      );
-      
-      const updatedCartCount = updatedCartItems.reduce((total, item) => total + item.quantity, 0);
-      const updatedCartTotal = updatedCartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
-      
+      const updatedCartItems = state.cart.map(item => {
+        const matches =
+          (item.cartItemId && item.cartItemId === itemId) ||
+          (item.productId && item.productId === itemId) ||
+          item.id === itemId;
+        return matches ? { ...item, quantity } : item;
+      });
+
+      const updatedCartCount = updatedCartItems.reduce((total, item) => total + (item.quantity || 0), 0);
+      const updatedCartTotal = updatedCartItems.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0);
+
       return {
         ...state,
         cart: updatedCartItems,
         cartCount: updatedCartCount,
         cartTotal: updatedCartTotal
       };
-    
-    case actionTypes.REMOVE_FROM_CART:
-      const filteredCart = state.cart.filter(item => item.id !== action.payload);
-      const filteredCartCount = filteredCart.reduce((total, item) => total + item.quantity, 0);
-      const filteredCartTotal = filteredCart.reduce((total, item) => total + (item.price * item.quantity), 0);
-      
+    }
+
+    case actionTypes.REMOVE_FROM_CART: {
+      const filteredCart = state.cart.filter(item => {
+        const matches =
+          (item.cartItemId && item.cartItemId === action.payload) ||
+          (item.productId && item.productId === action.payload) ||
+          item.id === action.payload;
+        return !matches;
+      });
+      const filteredCartCount = filteredCart.reduce((total, item) => total + (item.quantity || 0), 0);
+      const filteredCartTotal = filteredCart.reduce((total, item) => total + ((item.price || 0) * (item.quantity || 0)), 0);
+
       return {
         ...state,
         cart: filteredCart,
         cartCount: filteredCartCount,
         cartTotal: filteredCartTotal
       };
+    }
     
     case actionTypes.CLEAR_CART:
       return { ...state, cart: [], cartCount: 0, cartTotal: 0 };
@@ -307,7 +372,17 @@ const appReducer = (state, action) => {
       return { ...state, user: normalizeUser(action.payload), isAuthenticated: true };
     
     case actionTypes.LOGOUT_USER:
-      return { ...state, user: null, isAuthenticated: false, cart: [], cartCount: 0, cartTotal: 0, wishlist: [], wishlistCount: 0 };
+      localStorage.removeItem('localCart');
+      return {
+        ...state,
+        user: null,
+        isAuthenticated: false,
+        cart: [],
+        cartCount: 0,
+        cartTotal: 0,
+        wishlist: [],
+        wishlistCount: 0
+      };
     
     default:
       return state;
@@ -366,6 +441,20 @@ export const AppProvider = ({ children }) => {
 
       // Check for existing auth token
       const token = localStorage.getItem('authToken');
+
+      // Load local cart for unauthenticated users (only if no auth token)
+      if (!token) {
+        const localCart = localStorage.getItem('localCart');
+        if (localCart) {
+          try {
+            const parsedCart = JSON.parse(localCart);
+            dispatch({ type: actionTypes.SET_CART, payload: parsedCart });
+          } catch (error) {
+            console.warn('Failed to parse local cart:', error);
+            localStorage.removeItem('localCart');
+          }
+        }
+      }
       if (token) {
         // Add retry logic for token validation
         let retryCount = 0;
@@ -376,12 +465,37 @@ export const AppProvider = ({ children }) => {
             const user = await apiService.getProfile();
             dispatch({ type: actionTypes.SET_USER, payload: user });
 
-            // Load user's cart (isolated from auth failures)
+            // Load user's cart and merge with local cart
             try {
-              const cart = await apiService.getCart();
-              dispatch({ type: actionTypes.SET_CART, payload: cart });
+              const backendCart = await apiService.getCart();
+              const localCart = localStorage.getItem('localCart');
+              
+              if (localCart) {
+                try {
+                  const parsedLocalCart = JSON.parse(localCart);
+                  // Merge local cart with backend cart (local takes priority)
+                  const mergedCart = [...parsedLocalCart];
+                  
+                  // Add backend items that aren't in local cart
+                  if (backendCart && Array.isArray(backendCart)) {
+                    backendCart.forEach(backendItem => {
+                      const existsInLocal = parsedLocalCart.find(localItem => localItem.id === backendItem.id);
+                      if (!existsInLocal) {
+                        mergedCart.push(backendItem);
+                      }
+                    });
+                  }
+                  
+                  dispatch({ type: actionTypes.SET_CART, payload: mergedCart });
+                } catch (parseError) {
+                  console.warn('Failed to parse local cart, using backend cart:', parseError);
+                  dispatch({ type: actionTypes.SET_CART, payload: backendCart });
+                }
+              } else {
+                dispatch({ type: actionTypes.SET_CART, payload: backendCart });
+              }
             } catch (cartError) {
-              console.warn('Failed to load cart during initialization:', cartError.message);
+              console.warn('Failed to load backend cart, keeping local cart:', cartError.message);
             }
 
             try {
@@ -447,71 +561,101 @@ export const AppProvider = ({ children }) => {
   const setSearchQuery = useCallback((query) => {
     dispatch({ type: actionTypes.SET_SEARCH_QUERY, payload: query });
   }, []);
-
+  
   const setFilters = useCallback((filters) => {
     dispatch({ type: actionTypes.SET_FILTERS, payload: filters });
   }, []);
 
-  const addToCart = useCallback(async (item) => {
+  const addToCart = useCallback(async (item, quantity = 1) => {
+    const validQuantity = validateQuantity(quantity, 1);
+
+    const payload = {
+      product_id: item.id ?? item.productId,
+      quantity: validQuantity,
+    };
+
     try {
-      // Validate and normalize quantity
-      const validQuantity = validateQuantity(item.quantity, 1);
+      const response = await apiService.addToCart(payload.product_id, payload.quantity);
 
-      // Call API to persist cart item to backend
-      await apiService.addToCart(item.id, validQuantity);
+      dispatch({ type: actionTypes.SET_CART, payload: response });
 
-      // Update frontend state
-      dispatch({ type: actionTypes.ADD_TO_CART, payload: { ...item, quantity: validQuantity } });
+      const persistedItems = response?.items ?? response ?? [];
+      if (persistedItems.length > 0) {
+        localStorage.setItem('localCart', JSON.stringify(persistedItems));
+      } else {
+        localStorage.removeItem('localCart');
+      }
 
-      toast.showSuccess(`Added ${item.title || 'item'} to cart!`);
+      // Show success toast with item details
+      const itemTitle = item.title || item.name || 'Item';
+      toast.showSuccess(`Added ${validQuantity} ${validQuantity > 1 ? 'units' : 'unit'} of ${itemTitle} to cart!`);
     } catch (error) {
       console.error('Failed to add item to cart:', error);
-
-      toast.showError('Failed to add item to cart. Please try again.');
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Item not available.';
+      toast.showError(errorMessage);
+      throw error; // Re-throw to allow calling component to handle if needed
     }
   }, [toast]);
 
   const updateCartItem = useCallback(async (itemId, quantity) => {
     try {
-      // Validate and normalize quantity
       const validQuantity = validateQuantity(quantity, 1);
+      const response = await apiService.updateCartItem(itemId, validQuantity);
 
-      // Call API to update cart item in backend
-      await apiService.updateCartItem(itemId, validQuantity);
+      dispatch({ type: actionTypes.SET_CART, payload: response });
 
-      // Update frontend state
-      dispatch({ type: actionTypes.UPDATE_CART_ITEM, payload: { itemId, quantity: validQuantity } });
+      const persistedItems = response?.items ?? response ?? [];
+      localStorage.setItem('localCart', JSON.stringify(persistedItems));
 
       toast.showSuccess('Cart updated successfully!');
     } catch (error) {
       console.error('Failed to update cart item:', error);
-
-      toast.showError('Failed to update cart. Please try again.');
+      const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Quantity exceeds available stock.';
+      toast.showError(errorMessage);
     }
   }, [toast]);
 
   const removeFromCart = useCallback(async (itemId) => {
     try {
-      // Try to remove item via API
-      await apiService.removeFromCart(itemId);
+      let response = null;
+      try {
+        response = await apiService.removeFromCart(itemId);
+      } catch (error) {
+        console.warn('Backend cart removal failed, falling back to local cart:', error);
+      }
 
-      // Update frontend state
-      dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+      if (response) {
+        dispatch({ type: actionTypes.SET_CART, payload: response });
+        const persistedItems = response?.items ?? response ?? [];
+        if (persistedItems.length > 0) {
+          localStorage.setItem('localCart', JSON.stringify(persistedItems));
+        } else {
+          localStorage.removeItem('localCart');
+        }
+      } else {
+        // Fallback to local cart management
+        const currentCart = state.cart;
+        const updatedCart = currentCart.filter(item => {
+          const matches =
+            (item.cartItemId && item.cartItemId === itemId) ||
+            (item.productId && item.productId === itemId) ||
+            item.id === itemId;
+          return !matches;
+        });
+
+        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+
+        if (updatedCart.length > 0) {
+          localStorage.setItem('localCart', JSON.stringify(updatedCart));
+        } else {
+          localStorage.removeItem('localCart');
+        }
+      }
 
       toast.showSuccess('Item removed from cart!');
     } catch (error) {
       console.error('Failed to remove item from cart:', error);
-
-      // Fallback: try to set quantity to 0 instead
-      try {
-        await apiService.updateCartItem(itemId, 0);
-        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
-        toast.showSuccess('Item removed from cart!');
-      } catch (fallbackError) {
-        console.error('Fallback removal also failed:', fallbackError);
-
-        toast.showError('Item removed from cart but may reappear after refresh. Please try again.');
-      }
+      toast.showError('Failed to remove item from cart. Please try again.');
     }
   }, [toast]);
 
@@ -521,14 +665,39 @@ export const AppProvider = ({ children }) => {
       await apiService.clearCart();
 
       dispatch({ type: actionTypes.CLEAR_CART });
+      localStorage.removeItem('localCart');
 
       toast.showSuccess('Cart cleared successfully!');
     } catch (error) {
       console.error('Failed to clear cart:', error);
-
       toast.showError('Failed to clear cart. Please try again.');
     }
   }, [toast]);
+
+  const clearCartLocal = useCallback(() => {
+    // Clear cart without making API calls (used after successful payment)
+    dispatch({ type: actionTypes.CLEAR_CART });
+    localStorage.removeItem('localCart');
+  }, []);
+
+  const syncCartWithBackend = useCallback(async () => {
+    // Sync frontend cart with backend (used to ensure consistency)
+    if (!state.isAuthenticated) return;
+    
+    try {
+      const cart = await apiService.getCart();
+      dispatch({ type: actionTypes.SET_CART, payload: cart });
+      
+      const persistedItems = cart?.items ?? cart ?? [];
+      if (persistedItems.length > 0) {
+        localStorage.setItem('localCart', JSON.stringify(persistedItems));
+      } else {
+        localStorage.removeItem('localCart');
+      }
+    } catch (error) {
+      console.warn('Failed to sync cart with backend:', error.message);
+    }
+  }, [state.isAuthenticated]);
 
   const fetchWishlist = useCallback(async () => {
     if (!state.isAuthenticated) {
@@ -659,6 +828,17 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: actionTypes.LOGOUT_USER });
   }, []);
 
+  const refreshProductData = useCallback(async () => {
+    try {
+      if (state.currentProduct?.id) {
+        const updatedProduct = await apiService.getProduct(state.currentProduct.id);
+        dispatch({ type: actionTypes.SET_CURRENT_PRODUCT, payload: updatedProduct });
+      }
+    } catch (error) {
+      console.warn('Failed to refresh product data:', error);
+    }
+  }, [state.currentProduct?.id]);
+
   // Combine all actions into a single stable object
   const actions = useMemo(() => ({
     setLoading,
@@ -673,6 +853,8 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    clearCartLocal,
+    syncCartWithBackend,
     fetchWishlist,
     addToWishlist,
     removeFromWishlist,
@@ -680,6 +862,7 @@ export const AppProvider = ({ children }) => {
     login,
     logout,
     refreshAuth,
+    refreshProductData,
   }), [
     setLoading,
     setError,
@@ -693,6 +876,8 @@ export const AppProvider = ({ children }) => {
     updateCartItem,
     removeFromCart,
     clearCart,
+    clearCartLocal,
+    syncCartWithBackend,
     fetchWishlist,
     addToWishlist,
     removeFromWishlist,
@@ -700,6 +885,7 @@ export const AppProvider = ({ children }) => {
     login,
     logout,
     refreshAuth,
+    refreshProductData,
   ]);
 
   return (

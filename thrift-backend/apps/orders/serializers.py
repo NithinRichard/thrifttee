@@ -185,15 +185,23 @@ class CreateOrderSerializer(serializers.ModelSerializer):
                 notes=validated_data.get('notes', '')
             )
 
-            # Create order items
+            # Create order items and reduce product quantities
             from apps.products.models import TShirt
             for item_data in order_items_data:
                 try:
                     tshirt = TShirt.objects.get(id=item_data['product'])
+                    quantity_ordered = item_data['quantity']
+
+                    # Reduce product quantity
+                    tshirt.quantity = max(0, tshirt.quantity - quantity_ordered)
+                    # Update is_available status
+                    tshirt.is_available = tshirt.quantity > 0
+                    tshirt.save(update_fields=['quantity', 'is_available', 'updated_at'])
+
                     OrderItem.objects.create(
                         order=order,
                         tshirt=tshirt,
-                        quantity=item_data['quantity'],
+                        quantity=quantity_ordered,
                         price=tshirt.price,  # Current price
                         product_title=tshirt.title,
                         product_brand=tshirt.brand,

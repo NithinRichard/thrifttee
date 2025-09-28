@@ -32,7 +32,6 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    'rest_framework',
     'rest_framework.authtoken',
     'corsheaders',
     'django_filters',
@@ -44,6 +43,7 @@ LOCAL_APPS = [
     'apps.orders',
     'apps.cart',
     'apps.common',
+    'apps.shipping',  # Added shipping app
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -169,6 +169,12 @@ PAYMENT_CURRENCY = 'INR'
 TAX_RATE = 0.18  # 18% GST
 FREE_SHIPPING_THRESHOLD = 1000  # Free shipping over ₹1000
 DEFAULT_SHIPPING_CHARGE = 50
+
+# Shiprocket Configuration
+SHIPROCKET_EMAIL = os.getenv('SHIPROCKET_EMAIL', '')
+SHIPROCKET_PASSWORD = os.getenv('SHIPROCKET_PASSWORD', '')
+SHIPROCKET_CHANNEL_ID = os.getenv('SHIPROCKET_CHANNEL_ID', '')
+SHIPROCKET_WEBHOOK_SECRET = os.getenv('SHIPROCKET_WEBHOOK_SECRET', '')
 
 # Security Settings
 SECURE_PAYMENT_PROCESSING = True

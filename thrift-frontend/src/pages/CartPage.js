@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
@@ -7,6 +7,13 @@ import CartItem from '../components/cart/CartItem';
 
 const CartPage = () => {
   const { state, actions } = useApp();
+
+  // Sync cart with backend when page loads (in case backend cleared it)
+  useEffect(() => {
+    if (state.isAuthenticated) {
+      actions.syncCartWithBackend();
+    }
+  }, [state.isAuthenticated, actions]);
 
   const cartSubtotal = state.cart.reduce(
     (total, item) => total + item.price * item.quantity,

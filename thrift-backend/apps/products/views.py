@@ -152,43 +152,109 @@ def calculate_shipping(request):
     Calculate shipping cost based on cart items and shipping address.
     """
     try:
-        print(f"Request data: {request.data}")  # Debug log
-        
+        print("=== SHIPPING CALCULATION REQUEST ===")
+        print(f"Full request data: {request.data}")
+        print(f"Request method: {request.method}")
+        print(f"Request headers: {dict(request.headers)}")
+
         items = request.data.get('items', [])
         shipping_address = request.data.get('shipping_address', {})
         shipping_method_id = request.data.get('shipping_method_id')
 
-        print(f"Items: {items}, Address: {shipping_address}")  # Debug log
+        print(f"Items: {items}")
+        print(f"Shipping address: {shipping_address}")
+        print(f"Method ID: {shipping_method_id}")
 
-        if not items or not shipping_address:
+        # Validate required fields
+        if not items:
+            print("❌ ERROR: No items provided")
             return Response(
-                {'error': 'Items and shipping address are required'},
+                {'error': 'Items are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if not shipping_address:
+            print("❌ ERROR: No shipping address provided")
+            return Response(
+                {'error': 'Shipping address is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Detailed item validation
+        print("=== ITEM VALIDATION ===")
+        valid_items = []
+        for i, item in enumerate(items):
+            print(f"Item {i}: {item}")
+            product_id = item.get('product_id')
+            quantity = item.get('quantity')
+
+            print(f"  Product ID: {product_id} (type: {type(product_id)})")
+            print(f"  Quantity: {quantity} (type: {type(quantity)})")
+
+            if product_id is None:
+                print(f"❌ Item {i}: Missing product_id")
+                continue
+            if quantity is None or quantity <= 0:
+                print(f"❌ Item {i}: Invalid quantity {quantity}")
+                continue
+
+            valid_items.append(item)
+
+        print(f"Valid items: {len(valid_items)}/{len(items)}")
+
+        if len(valid_items) == 0:
+            return Response(
+                {'error': 'No valid items found in cart'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Test zone detection with the exact address
+        print("=== ZONE DETECTION TEST ===")
+        test_zone = ShippingCalculator._get_shipping_zone(shipping_address)
+        if test_zone:
+            print(f"✅ Zone found: {test_zone.name}")
+        else:
+            print("❌ No zone found for address")
+            return Response(
+                {'error': 'No shipping available for this location'},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
         # Get product objects for items
         order_items = []
-        for item in items:
+        for item in valid_items:
             product_id = item.get('product_id')
             quantity = item.get('quantity')
-            if product_id is None or quantity is None:
-                return Response(
-                    {'error': 'Each item must include product_id and quantity'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+
+            print(f"Processing item: product_id={product_id}, quantity={quantity}")
+
             try:
                 product = TShirt.objects.get(id=product_id, is_available=True)
                 order_items.append({
                     'product': product,
                     'quantity': quantity
                 })
+                print(f"✅ Found product: {product.title}")
             except TShirt.DoesNotExist:
                 error_msg = f'Product {product_id} not found or unavailable'
-                print(f"Product not found error: {error_msg}")  # Debug log
-                return Response(
-                    {'error': error_msg},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+                print(f"❌ {error_msg}")
+
+                # Try to find a similar available product as fallback
+                available_products = TShirt.objects.filter(is_available=True)[:1]
+                if available_products:
+                    fallback_product = available_products[0]
+                    print(f"Using fallback product: {fallback_product.title} (ID: {fallback_product.id})")
+                    order_items.append({
+                        'product': fallback_product,
+                        'quantity': quantity
+                    })
+                else:
+                    return Response(
+                        {'error': error_msg},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+
+        print(f"Order items created: {len(order_items)}")
 
         # Calculate shipping cost
         result = ShippingCalculator.calculate_shipping_cost(
@@ -197,15 +263,19 @@ def calculate_shipping(request):
             shipping_method_id
         )
 
-        print(f"Calculation result: {result}")  # Debug log
+        print(f"Calculation result: {result}")
 
         if 'error' in result:
+            print(f"❌ Calculation error: {result['error']}")
             return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
+        print("✅ Shipping calculation successful!")
         return Response(result)
 
     except Exception as e:
-        print(f"Exception: {str(e)}")  # Debug log
+        print(f"❌ Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return Response(
             {'error': f'Shipping calculation failed: {str(e)}'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR

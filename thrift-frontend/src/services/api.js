@@ -162,6 +162,11 @@ class ApiService {
     return response.data;
   }
 
+  async removeFromCart(itemId) {
+    const response = await api.delete(`/cart/remove/${itemId}/`);
+    return response.data;
+  }
+
   async clearCart() {
     const response = await api.delete('/cart/clear/');
     return response.data;

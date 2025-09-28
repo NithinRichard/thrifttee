@@ -4,6 +4,12 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 from .models import TShirt, Brand, Category
 
+
+class CharInFilter(django_filters.BaseInFilter, django_filters.CharFilter):
+    """Filter that supports comma-separated string values."""
+
+    pass
+
 class TShirtFilter(django_filters.FilterSet):
     """Comprehensive filter class for T-Shirt model."""
     
@@ -19,9 +25,9 @@ class TShirtFilter(django_filters.FilterSet):
     )
     
     # Category filters
-    category = django_filters.ModelMultipleChoiceFilter(
-        queryset=Category.objects.all(),
-        field_name='category'
+    category = CharInFilter(
+        field_name='category__slug',
+        lookup_expr='in'
     )
     
     # Size filters

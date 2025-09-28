@@ -13,7 +13,14 @@ const ProductCard = ({ product }) => {
     return (state.wishlist || []).some((item) => item.id === product.id);
   }, [state.wishlist, product.id]);
 
+  const isAvailable = product.is_available !== false && (product.quantity > 0);
+
   const handleAddToCart = (e) => {
+    if (!isAvailable) {
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     e.preventDefault();
     e.stopPropagation();
     actions.addToCart(product);
@@ -62,13 +69,22 @@ const ProductCard = ({ product }) => {
             <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 flex flex-col sm:flex-row gap-2">
               <button
                 onClick={handleAddToCart}
-                className="bg-white text-gray-900 px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
+                disabled={!isAvailable}
+                className={`px-3 py-2 rounded-full text-sm font-semibold transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                  isAvailable
+                    ? 'bg-white text-gray-900 hover:bg-gray-100'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                }`}
               >
-                Add to Cart
+                {isAvailable ? 'Add to Cart' : 'Out of Stock'}
               </button>
               <button
                 onClick={handleToggleWishlist}
-                className={`bg-white ${isInWishlist ? 'text-red-500' : 'text-gray-900'} px-3 py-2 rounded-full text-sm font-semibold hover:bg-gray-100 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center`}
+                className={`px-3 py-2 rounded-full text-sm font-semibold transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
+                  isAvailable
+                    ? (isInWishlist ? 'bg-red-50 text-red-500' : 'bg-white text-gray-900')
+                    : 'bg-gray-200 text-gray-400'
+                }`}
                 aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
               >
                 {isInWishlist ? '♥' : '♡'}
@@ -82,7 +98,12 @@ const ProductCard = ({ product }) => {
               Featured
             </div>
           )}
-          {product.condition && (
+          {!isAvailable && (
+            <div className="absolute top-2 left-2 bg-red-600 text-white px-2 py-1 rounded-full text-xs font-semibold">
+              Out of Stock
+            </div>
+          )}
+          {product.condition && isAvailable && (
             <div className="absolute top-2 right-2 bg-gray-800 text-white px-2 py-1 rounded-full text-xs">
               {product.condition}
             </div>
@@ -95,12 +116,17 @@ const ProductCard = ({ product }) => {
           </h3>
 
           <div className="flex justify-between items-center mb-3">
-            <div className="text-xl md:text-2xl font-bold text-vintage-600">
+            <div className={`text-xl md:text-2xl font-bold ${!isAvailable ? 'text-gray-400 line-through' : 'text-vintage-600'}`}>
               {formatINR(product.price)}
             </div>
-            {product.original_price && (
+            {product.original_price && isAvailable && (
               <div className="text-sm text-gray-500 line-through">
                 {formatINR(product.original_price)}
+              </div>
+            )}
+            {!isAvailable && (
+              <div className="text-sm text-red-600 font-semibold">
+                Out of Stock
               </div>
             )}
           </div>
@@ -142,9 +168,14 @@ const ProductCard = ({ product }) => {
       <div className="px-3 md:px-4 pb-3 md:pb-4 flex flex-col sm:flex-row gap-2">
         <button
           onClick={handleAddToCart}
-          className="flex-1 bg-vintage-600 text-white py-3 md:py-2 rounded-lg font-semibold hover:bg-vintage-700 transition-colors duration-300 min-h-[44px] text-sm md:text-base"
+          disabled={!isAvailable}
+          className={`flex-1 py-3 md:py-2 rounded-lg font-semibold transition-colors duration-300 min-h-[44px] text-sm md:text-base ${
+            isAvailable
+              ? 'bg-vintage-600 text-white hover:bg-vintage-700'
+              : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+          }`}
         >
-          Add to Cart
+          {isAvailable ? 'Add to Cart' : 'Out of Stock'}
         </button>
         <button
           onClick={handleToggleWishlist}

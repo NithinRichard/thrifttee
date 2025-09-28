@@ -339,6 +339,33 @@ class ShippingCalculator(models.Model):
             Dict with shipping_cost, method, estimated_days, breakdown
         """
         from decimal import Decimal
+        from apps.shipping.services import shiprocket_service
+
+        # Try Shiprocket first
+        if shiprocket_service.is_available():
+            try:
+                shiprocket_result = shiprocket_service.calculate_shipping_rate(
+                    order_items,
+                    shipping_address
+                )
+
+                # If Shiprocket returns a valid result, use it
+                if 'error' not in shiprocket_result:
+                    return shiprocket_result
+
+            except Exception as e:
+                # Log error but continue with fallback
+                import logging
+                logger = logging.getLogger(__name__)
+                logger.warning(f"Shiprocket calculation failed, using fallback: {e}")
+
+        # Fallback to static calculation
+        return ShippingCalculator._calculate_static_shipping(order_items, shipping_address, shipping_method_id)
+
+    @staticmethod
+    def _calculate_static_shipping(order_items, shipping_address, shipping_method_id=None):
+        """Fallback static shipping calculation when Shiprocket is unavailable."""
+        from decimal import Decimal
 
         # Determine shipping zone
         zone = ShippingCalculator._get_shipping_zone(shipping_address)
@@ -383,26 +410,37 @@ class ShippingCalculator(models.Model):
         if not rate:
             return {'error': 'No shipping rates available for this weight', 'shipping_cost': 0}
 
-        # Base shipping cost
-        shipping_cost = rate.base_cost
+        # Calculate components separately to avoid negative breakdown values
+        # Base cost
+        base_cost = rate.base_cost
 
-        # Additional weight cost
+        # Additional weight cost (before multiplier)
+        weight_extra = Decimal('0')
         if total_weight > rate.min_weight_kg:
-            extra_weight = float(total_weight) - float(rate.min_weight_kg)
+            extra_weight = Decimal(str(float(total_weight) - float(rate.min_weight_kg)))
             if extra_weight > 0:
-                shipping_cost += Decimal(str(extra_weight)) * rate.per_kg_cost
+                weight_extra = extra_weight * rate.per_kg_cost
 
-        # Insurance cost
+        # Insurance cost (percentage of total value)
+        insurance_cost = Decimal('0')
         if rate.insurance_rate > 0:
-            insurance_cost = total_value * rate.insurance_rate
-            shipping_cost += insurance_cost
+            insurance_cost = (total_value * rate.insurance_rate)
 
-        # Apply method multiplier
-        shipping_cost *= method.cost_multiplier
+        # Apply method multiplier only to base + weight
+        subtotal_before_multiplier = base_cost + weight_extra
+        subtotal_after_multiplier = subtotal_before_multiplier * method.cost_multiplier
+
+        # Total shipping cost before free-shipping check
+        shipping_cost = subtotal_after_multiplier + insurance_cost
 
         # Check for free shipping
-        if zone.free_shipping_threshold and total_value >= zone.free_shipping_threshold:
+        free_shipping_applied = bool(zone.free_shipping_threshold and total_value >= zone.free_shipping_threshold)
+        if free_shipping_applied:
             shipping_cost = Decimal('0')
+
+        # Prepare breakdown ensuring non-negative components for display
+        breakdown_weight_cost = (weight_extra * method.cost_multiplier) if not free_shipping_applied else Decimal('0')
+        breakdown_insurance_cost = insurance_cost if not free_shipping_applied else Decimal('0')
 
         return {
             'shipping_cost': float(shipping_cost),
@@ -410,11 +448,11 @@ class ShippingCalculator(models.Model):
             'estimated_days': method.estimated_days,
             'zone': zone.name,
             'breakdown': {
-                'base_cost': float(rate.base_cost),
-                'weight_cost': float(shipping_cost - rate.base_cost - (total_value * rate.insurance_rate)),
-                'insurance_cost': float(total_value * rate.insurance_rate),
+                'base_cost': float(base_cost if not free_shipping_applied else Decimal('0')),
+                'weight_cost': float(breakdown_weight_cost),
+                'insurance_cost': float(breakdown_insurance_cost),
                 'method_multiplier': float(method.cost_multiplier),
-                'free_shipping_applied': zone.free_shipping_threshold and total_value >= zone.free_shipping_threshold
+                'free_shipping_applied': free_shipping_applied
             }
         }
 
@@ -425,7 +463,7 @@ class ShippingCalculator(models.Model):
         state = address.get('state', '')
         country = address.get('country', 'IN')
 
-        # Only process if country is India
+        # Only accept India
         if country != 'IN':
             return None
 
@@ -439,15 +477,17 @@ class ShippingCalculator(models.Model):
                 if postal_code in metro_codes:
                     return zone
 
-            # Check states
+            # Check states (case-insensitive and flexible matching)
             if zone.states and state:
-                states = [s.strip() for s in zone.states.split(',')]
-                if state in states:
+                states = [s.strip().upper() for s in zone.states.split(',')]
+                state_upper = state.strip().upper()
+                if state_upper in states:
                     return zone
 
         # Return default zone if no specific match
         try:
-            return zones.first()
+            default_zone = zones.first()
+            return default_zone
         except:
             return None
 

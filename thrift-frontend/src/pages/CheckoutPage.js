@@ -11,7 +11,16 @@ const CheckoutPage = () => {
   const [loading, setLoading] = useState(false);
   const [orderData, setOrderData] = useState(null);
   const [paymentError, setPaymentError] = useState('');
-  const [shippingCost, setShippingCost] = useState(0);
+  const [shippingCost, setShippingCost] = useState(50); // Default shipping cost
+  const [shippingAddress, setShippingAddress] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    postal_code: '',
+    country: 'IN'
+  });
 
   const [isCheckingOrder, setIsCheckingOrder] = useState(false);
 
@@ -100,12 +109,12 @@ const CheckoutPage = () => {
         return;
       }
 
-      // No pending order found
-      if (!state.isAuthenticated) {
-        setIsCheckingOrder(false);
-        navigate('/login');
-        return;
-      }
+      // No pending order found - allow guest checkout
+      // if (!state.isAuthenticated) {
+      //   setIsCheckingOrder(false);
+      //   navigate('/login');
+      //   return;
+      // }
 
       if (state.cart.length === 0) {
         setIsCheckingOrder(false);
@@ -166,11 +175,12 @@ const CheckoutPage = () => {
       }
 
       // If error checking pending order, fall back to normal flow
-      if (!state.isAuthenticated) {
-        setIsCheckingOrder(false);
-        navigate('/login');
-        return;
-      }
+      // Allow guest checkout
+      // if (!state.isAuthenticated) {
+      //   setIsCheckingOrder(false);
+      //   navigate('/login');
+      //   return;
+      // }
 
       if (state.cart.length === 0) {
         setIsCheckingOrder(false);
@@ -226,6 +236,9 @@ const CheckoutPage = () => {
             console.log('Verification response:', verificationResponse);
 
             if (verificationResponse && verificationResponse.status === 'success') {
+              // Clear frontend cart state after successful payment (backend already cleared it)
+              actions.clearCartLocal();
+              
               // Show success message using state
               setPaymentError(''); // Clear any existing error
               alert('Payment successful! Your order is being processed.');
@@ -314,7 +327,20 @@ const CheckoutPage = () => {
   };
 
   const handleShippingCostUpdate = (cost) => {
-    setShippingCost(cost);
+    setShippingCost(cost || 50); // Fallback to ₹50 if no cost provided
+  };
+
+  const handleAddressChange = (e) => {
+    const { name, value } = e.target;
+    setShippingAddress(prev => ({ ...prev, [name]: value }));
+
+    // Auto-calculate shipping when state is selected
+    if (name === 'state' && value && shippingAddress.postal_code) {
+      // Trigger shipping calculation after a short delay
+      setTimeout(() => {
+        // The VintageShippingSelector will automatically recalculate when shippingAddress changes
+      }, 100);
+    }
   };
 
   if (loading) {
@@ -349,23 +375,111 @@ const CheckoutPage = () => {
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-            {/* Shipping Calculator */}
+            {/* Shipping Address */}
             <motion.div
               initial={{ opacity: 0, y: 30 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.1 }}
               className="lg:col-span-1"
             >
-              <VintageShippingSelector
-                cartItems={state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))}
-                shippingAddress={{
-                  postal_code: "687767",
-                  state: "KL",
-                  country: "IN"
-                }}
-                onShippingSelect={handleShippingSelect}
-                onShippingCostUpdate={handleShippingCostUpdate}
-              />
+              <div className="bg-white p-6 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-vintage font-bold text-gray-900 mb-6">
+                  Shipping Address
+                </h2>
+                <div className="space-y-4">
+                  <input
+                    type="tel"
+                    name="phone"
+                    placeholder="Phone Number"
+                    value={shippingAddress.phone}
+                    onChange={handleAddressChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vintage-600 focus:border-transparent"
+                    required
+                  />
+                  <textarea
+                    name="address"
+                    placeholder="Street Address"
+                    value={shippingAddress.address}
+                    onChange={handleAddressChange}
+                    rows={3}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vintage-600 focus:border-transparent"
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      name="city"
+                      placeholder="City"
+                      value={shippingAddress.city}
+                      onChange={handleAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vintage-600 focus:border-transparent"
+                      required
+                    />
+                    <select
+                      name="state"
+                      value={shippingAddress.state}
+                      onChange={handleAddressChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vintage-600 focus:border-transparent"
+                      required
+                    >
+                      <option value="">Select State</option>
+                      <option value="AP">Andhra Pradesh</option>
+                      <option value="AR">Arunachal Pradesh</option>
+                      <option value="AS">Assam</option>
+                      <option value="BR">Bihar</option>
+                      <option value="CG">Chhattisgarh</option>
+                      <option value="GA">Goa</option>
+                      <option value="GJ">Gujarat</option>
+                      <option value="HR">Haryana</option>
+                      <option value="HP">Himachal Pradesh</option>
+                      <option value="JK">Jammu and Kashmir</option>
+                      <option value="JH">Jharkhand</option>
+                      <option value="KA">Karnataka</option>
+                      <option value="KL">Kerala</option>
+                      <option value="MP">Madhya Pradesh</option>
+                      <option value="MH">Maharashtra</option>
+                      <option value="MN">Manipur</option>
+                      <option value="ML">Meghalaya</option>
+                      <option value="MZ">Mizoram</option>
+                      <option value="NL">Nagaland</option>
+                      <option value="OR">Odisha</option>
+                      <option value="PB">Punjab</option>
+                      <option value="RJ">Rajasthan</option>
+                      <option value="SK">Sikkim</option>
+                      <option value="TN">Tamil Nadu</option>
+                      <option value="TG">Telangana</option>
+                      <option value="TR">Tripura</option>
+                      <option value="UP">Uttar Pradesh</option>
+                      <option value="UT">Uttarakhand</option>
+                      <option value="WB">West Bengal</option>
+                      <option value="DL">Delhi</option>
+                      <option value="PY">Puducherry</option>
+                      <option value="LD">Lakshadweep</option>
+                      <option value="AN">Andaman and Nicobar Islands</option>
+                      <option value="DN">Dadra and Nagar Haveli</option>
+                      <option value="CH">Chandigarh</option>
+                    </select>
+                  </div>
+                  <input
+                    type="text"
+                    name="postal_code"
+                    placeholder="PIN Code (e.g., 695586 for Kerala)"
+                    value={shippingAddress.postal_code}
+                    onChange={handleAddressChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-vintage-600 focus:border-transparent"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="mt-6">
+                <VintageShippingSelector
+                  cartItems={state.cart.map(item => ({ product_id: item.id, quantity: item.quantity }))}
+                  shippingAddress={shippingAddress}
+                  onShippingSelect={handleShippingSelect}
+                  onShippingCostUpdate={handleShippingCostUpdate}
+                />
+              </div>
             </motion.div>
 
             {/* Order Summary */}

@@ -26,7 +26,7 @@ class TShirtListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'brand', 'category', 'size', 'color',
             'condition', 'price', 'original_price', 'discount_percentage',
-            'primary_image', 'is_featured', 'quantity', 'created_at'
+            'primary_image', 'is_featured', 'quantity', 'is_available', 'created_at'
         ]
 
 class TShirtDetailSerializer(serializers.ModelSerializer):

@@ -6,6 +6,7 @@ import { useApp } from '../contexts/AppContext';
 import apiService from '../services/api';
 import ProductCard from '../components/product/ProductCard';
 import ConditionReport from '../components/product/ConditionReport';
+import CReport from '../components/creport';
 import ProductReviews from '../components/product/ProductReviews';
 import { VintageCountdownTimer, VintageReservationWarning, VintageExpirationNotice } from '../components/reservation';
 import useReservation from '../hooks/useReservation';
@@ -81,16 +82,29 @@ const ProductDetailPage = () => {
 
     loadProductData();
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [slug, actions]);
+  }, [slug]); // Remove actions from dependencies to prevent unnecessary re-runs
 
-  const handleAddToCart = () => {
+  const isAvailable = product?.is_available !== false && (product?.quantity > 0);
+
+  const handleAddToCart = async (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (!isAvailable) {
+      setError('This item is currently out of stock');
+      return;
+    }
     if (product) {
       // Check if item is reserved by someone else
       if (reservation?.is_reserved && !reservation?.is_own_reservation) {
         setError('This item is currently held by another customer');
         return;
       }
-      actions.addToCart(product);
+      // Remove quantity from product to avoid confusion
+      const { quantity: _, ...productWithoutQuantity } = product;
+      await actions.addToCart(product); // Pass original product object, not productWithoutQuantity
     }
   };
 
@@ -257,13 +271,15 @@ const ProductDetailPage = () => {
                   <div className="font-bold text-gray-600">Stock</div>
                   <div className="text-gray-800">
                     {reservation?.available_quantity !== undefined ? (
-                      reservation.available_quantity > 1 ? 
+                      reservation.available_quantity > 1 ?
                         `${reservation.available_quantity} of ${reservation.total_quantity || product.quantity} available` :
-                        reservation.available_quantity === 1 ? 
+                        reservation.available_quantity === 1 ?
                           `${reservation.available_quantity} of ${reservation.total_quantity || product.quantity} available` :
                           'Out of stock'
                     ) : (
-                      product.quantity > 1 ? `${product.quantity} available` : 'Unique item'
+                      isAvailable ?
+                        (product.quantity > 1 ? `${product.quantity} available` : 'Unique item') :
+                        'Out of Stock'
                     )}
                   </div>
                 </div>
@@ -303,8 +319,10 @@ const ProductDetailPage = () => {
                     {state.isAuthenticated ? (
                       <button
                         onClick={createReservation}
-                        disabled={loading}
-                        className="btn-secondary w-full text-lg py-3"
+                        disabled={loading || !isAvailable}
+                        className={`w-full text-lg py-3 ${
+                          loading || !isAvailable ? 'btn-disabled' : 'btn-secondary'
+                        }`}
                       >
                         {loading ? 'Creating Hold...' : 'Hold Item (15 min)'}
                       </button>
@@ -318,17 +336,23 @@ const ProductDetailPage = () => {
                     )}
                     <button
                       onClick={handleAddToCart}
-                      className="btn-primary w-full text-lg py-3"
+                      disabled={!isAvailable}
+                      className={`w-full text-lg py-3 ${
+                        isAvailable ? 'btn-primary' : 'btn-disabled'
+                      }`}
                     >
-                      Add to Cart
+                      {isAvailable ? 'Add to Cart' : 'Out of Stock'}
                     </button>
                   </>
                 ) : reservation?.is_own_reservation ? (
                   <button
                     onClick={handleAddToCart}
-                    className="btn-primary w-full text-lg py-3"
+                    disabled={!isAvailable}
+                    className={`w-full text-lg py-3 ${
+                      isAvailable ? 'btn-primary' : 'btn-disabled'
+                    }`}
                   >
-                    Add to Cart
+                    {isAvailable ? 'Add to Cart' : 'Out of Stock'}
                   </button>
                 ) : (
                   <button
@@ -362,7 +386,7 @@ const ProductDetailPage = () => {
             transition={{ duration: 0.6, delay: 0.6 }}
             className="mt-12"
           >
-            <ConditionReport tshirt={product} />
+            <CReport tshirt={product} />
           </motion.div>
         )}
 

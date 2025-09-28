@@ -20,6 +20,7 @@ from .serializers import (
 )
 from apps.cart.models import Cart
 from .models import Order, OrderItem
+from apps.products.utils import reduce_inventory_for_order
 
 class OrderViewSet(viewsets.ModelViewSet):
     """Order viewset with Razorpay payment integration."""
@@ -256,6 +257,77 @@ class OrderViewSet(viewsets.ModelViewSet):
                 order.payment_status = 'completed'
                 order.status = 'processing'
 
+                # Reduce product inventory for successful orders
+                try:
+                    inventory_result = reduce_inventory_for_order(order)
+                    # Log inventory reduction details if needed
+                    print(f"Inventory reduced for order {order.order_number}: {inventory_result['total_products_updated']} products updated")
+                except ValueError as e:
+                    # Log the error but don't fail the payment verification
+                    # The order is still valid even if inventory update fails
+                    print(f"Warning: Inventory reduction failed for order {order.order_number}: {str(e)}")
+                except Exception as e:
+                    # Catch any other errors during inventory reduction
+                    print(f"Warning: Unexpected error during inventory reduction for order {order.order_number}: {str(e)}")
+
+                # Create Shiprocket order for successful payments
+                try:
+                    from apps.shipping.services import shiprocket_service
+
+                    if shiprocket_service.is_available():
+                        # Prepare order items for Shiprocket
+                        order_items = []
+                        for item in order.items.all():
+                            order_items.append({
+                                'product': item.tshirt,
+                                'quantity': item.quantity
+                            })
+
+                        # Prepare shipping address from order data
+                        shipping_address = {
+                            'name': order.shipping_name,
+                            'email': order.shipping_email,
+                            'phone': order.shipping_phone,
+                            'address': order.shipping_address_line1,
+                            'city': order.shipping_city,
+                            'state': order.shipping_state,
+                            'country': order.shipping_country,
+                            'postal_code': order.shipping_postal_code
+                        }
+
+                        # Create Shiprocket order
+                        shiprocket_result = shiprocket_service.create_shipment(
+                            order_data={
+                                'order_id': str(order.id),
+                                'created_at': order.created_at
+                            },
+                            order_items=order_items,
+                            shipping_address=shipping_address
+                        )
+
+                        if shiprocket_result.get('success'):
+                            # Update order with Shiprocket tracking info
+                            order.shiprocket_order_id = shiprocket_result.get('shiprocket_order_id')
+                            order.tracking_number = shiprocket_result.get('tracking_number')
+                            order.courier_name = shiprocket_result.get('courier_name')
+                            order.awb_number = shiprocket_result.get('awb')
+                            order.estimated_delivery = shiprocket_result.get('estimated_delivery')
+                            order.status = 'shipped'  # Update to shipped since Shiprocket order is created
+
+                            print(f"✅ Shiprocket order created for order {order.order_number}")
+                            print(f"   Shiprocket Order ID: {shiprocket_result.get('shiprocket_order_id')}")
+                            print(f"   Tracking Number: {shiprocket_result.get('tracking_number')}")
+                            print(f"   Courier: {shiprocket_result.get('courier_name')}")
+                        else:
+                            print(f"❌ Shiprocket order creation failed for order {order.order_number}: {shiprocket_result.get('error')}")
+                            # Don't fail the payment verification if Shiprocket fails
+                    else:
+                        print(f"⚠️ Shiprocket service not available for order {order.order_number}")
+
+                except Exception as e:
+                    print(f"❌ Error creating Shiprocket order for order {order.order_number}: {str(e)}")
+                    # Don't fail the payment verification if Shiprocket fails
+
                 # Clear user's cart only after successful payment
                 try:
                     cart = Cart.objects.get(user=request.user)
@@ -405,6 +477,16 @@ class LegacyOrderViews:
             order.status = 'processing'
             order.save()
 
+            # Reduce product inventory for successful orders
+            try:
+                inventory_result = reduce_inventory_for_order(order)
+                print(f"Legacy: Inventory reduced for order {order.order_number}: {inventory_result['total_products_updated']} products updated")
+            except ValueError as e:
+                # Log the error but don't fail the payment confirmation
+                print(f"Legacy Warning: Inventory reduction failed for order {order.order_number}: {str(e)}")
+            except Exception as e:
+                print(f"Legacy Warning: Unexpected error during inventory reduction for order {order.order_number}: {str(e)}")
+
             return JsonResponse({
                 'status': 'success',
                 'message': 'Payment confirmed successfully',
@@ -455,6 +537,70 @@ class LegacyOrderViews:
                         order.status = 'processing'
                         order.payment_gateway_response = payment_data
                         order.save()
+
+                        # Create Shiprocket order for successful webhook payments
+                        try:
+                            from apps.shipping.services import shiprocket_service
+
+                            if shiprocket_service.is_available():
+                                # Prepare order items for Shiprocket
+                                order_items = []
+                                for item in order.items.all():
+                                    order_items.append({
+                                        'product': item.tshirt,
+                                        'quantity': item.quantity
+                                    })
+
+                                # Prepare shipping address from order data
+                                shipping_address = {
+                                    'name': order.shipping_name,
+                                    'email': order.shipping_email,
+                                    'phone': order.shipping_phone,
+                                    'address': order.shipping_address_line1,
+                                    'city': order.shipping_city,
+                                    'state': order.shipping_state,
+                                    'country': order.shipping_country,
+                                    'postal_code': order.shipping_postal_code
+                                }
+
+                                # Create Shiprocket order
+                                shiprocket_result = shiprocket_service.create_shipment(
+                                    order_data={
+                                        'order_id': str(order.id),
+                                        'created_at': order.created_at
+                                    },
+                                    order_items=order_items,
+                                    shipping_address=shipping_address
+                                )
+
+                                if shiprocket_result.get('success'):
+                                    # Update order with Shiprocket tracking info
+                                    order.shiprocket_order_id = shiprocket_result.get('shiprocket_order_id')
+                                    order.tracking_number = shiprocket_result.get('tracking_number')
+                                    order.courier_name = shiprocket_result.get('courier_name')
+                                    order.awb_number = shiprocket_result.get('awb')
+                                    order.estimated_delivery = shiprocket_result.get('estimated_delivery')
+                                    order.status = 'shipped'
+                                    order.save()
+
+                                    print(f"✅ Webhook: Shiprocket order created for order {order.order_number}")
+                                else:
+                                    print(f"❌ Webhook: Shiprocket order creation failed for order {order.order_number}: {shiprocket_result.get('error')}")
+                            else:
+                                print(f"⚠️ Webhook: Shiprocket service not available for order {order.order_number}")
+
+                        except Exception as e:
+                            print(f"❌ Webhook: Error creating Shiprocket order for order {order.order_number}: {str(e)}")
+
+                        # Reduce product inventory for successful orders
+                        try:
+                            inventory_result = reduce_inventory_for_order(order)
+                            print(f"Webhook: Inventory reduced for order {order.order_number}: {inventory_result['total_products_updated']} products updated")
+                        except ValueError as e:
+                            # Log the error but don't fail the webhook processing
+                            print(f"Webhook Warning: Inventory reduction failed for order {order.order_number}: {str(e)}")
+                        except Exception as e:
+                            print(f"Webhook Warning: Unexpected error during inventory reduction for order {order.order_number}: {str(e)}")
 
                         # Clear user's cart
                         try:

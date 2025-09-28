@@ -1,130 +1,121 @@
 import React, { useState, useEffect } from 'react';
+import apiService from '../services/api';
 import './VintageShippingSelector.css';
 
-const VintageShippingSelector = ({ 
-  cartItems, 
-  shippingAddress, 
+const VintageShippingSelector = ({
+  cartItems,
+  shippingAddress,
   onShippingSelect,
-  onShippingCostUpdate 
+  onShippingCostUpdate
 }) => {
   const [selectedMethod, setSelectedMethod] = useState(null);
+  const [shippingMethods, setShippingMethods] = useState([]);
   const [shippingCosts, setShippingCosts] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const methods = [
-    {
-      id: 1,
-      name: "Standard Delivery",
-      description: "Reliable delivery with care & attention",
-      icon: "📦",
-      estimatedDays: "3-5 business days"
-    },
-    {
-      id: 2,
-      name: "Express Delivery", 
-      description: "Faster service for urgent needs",
-      icon: "🚚",
-      estimatedDays: "2-3 business days"
-    },
-    {
-      id: 3,
-      name: "Premium Express",
-      description: "Priority handling & swift delivery",
-      icon: "⚡",
-      estimatedDays: "1-2 business days"
-    }
-  ];
+  useEffect(() => {
+    const loadShippingMethods = async () => {
+      try {
+        const methods = await apiService.getShippingMethods();
+        setShippingMethods(methods);
 
-  const calculateShipping = async (methodId) => {
-    // Always set fallback prices first
-    const fallbackPrices = { 1: 50, 2: 100, 3: 150 };
-    setShippingCosts(prev => ({
-      ...prev,
-      [methodId]: fallbackPrices[methodId] || 50
-    }));
-    
-    if (!cartItems?.length || !shippingAddress) {
-      console.log('Using fallback prices - missing cart items or shipping address');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      // Format items for API with strict validation
-      const items = cartItems.map(item => {
-        const productId = item.product?.id || item.product_id || item.id || item.tshirt?.id;
-        const quantity = item.quantity || 1;
-        
-        console.log('Processing cart item:', { item, productId, quantity });
-        
-        return {
-          product_id: productId,
-          quantity: quantity
-        };
-      }).filter(item => {
-        const isValid = item.product_id && typeof item.product_id === 'number' && item.quantity > 0;
-        if (!isValid) {
-          console.warn('Filtering out invalid item:', item);
+        // Auto-select first method if available
+        if (methods.length > 0 && !selectedMethod) {
+          setSelectedMethod(methods[0]);
         }
-        return isValid;
-      });
+      } catch (error) {
+        console.error('Failed to load shipping methods:', error);
+        // Fallback to basic methods if API fails
+        setShippingMethods([
+          { id: 1, name: 'Standard Shipping', description: '3-5 business days', estimated_days: 4 },
+          { id: 2, name: 'Express Shipping', description: '1-2 business days', estimated_days: 2 }
+        ]);
+      }
+    };
 
-      if (items.length === 0) {
-        console.log('No valid items found, using fallback prices');
-        return;
-      }
-      
-      const response = await fetch('http://localhost:8000/api/v1/products/shipping/calculate/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          items,
-          shipping_address: shippingAddress,
-          shipping_method_id: methodId
-        })
-      });
-      
-      const data = await response.json();
-      
-      if (response.ok && !data.error && data.shipping_cost !== undefined) {
-        setShippingCosts(prev => ({
-          ...prev,
-          [methodId]: data.shipping_cost
-        }));
-        console.log(`Real shipping cost for method ${methodId}: ₹${data.shipping_cost}`);
-      } else {
-        console.log(`Using fallback price for method ${methodId}: ₹${fallbackPrices[methodId]}`);
-      }
-    } catch (error) {
-      console.log(`API error, using fallback price for method ${methodId}: ₹${fallbackPrices[methodId]}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+    loadShippingMethods();
+  }, []);
 
   useEffect(() => {
-    // Set initial fallback prices immediately
-    const fallbackPrices = { 1: 50, 2: 100, 3: 150 };
-    setShippingCosts(fallbackPrices);
-    
-    // Then try to calculate real prices
-    methods.forEach(method => {
-      calculateShipping(method.id);
-    });
-  }, [cartItems, shippingAddress]);
+    if (cartItems?.length && shippingAddress && shippingMethods.length > 0) {
+      calculateAllShippingCosts();
+    }
+  }, [cartItems, shippingAddress, shippingMethods]);
+
+  const calculateAllShippingCosts = async () => {
+    if (!cartItems?.length || !shippingAddress) return;
+
+    setLoading(true);
+
+    // Format cart items for API
+    const items = cartItems.map(item => {
+      const productId = item.product?.id || item.product_id || item.id;
+      const quantity = item.quantity || 1;
+
+      return { product_id: productId, quantity };
+    }).filter(item => item.product_id);
+
+    if (items.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Calculate cost for each shipping method
+    for (const method of shippingMethods) {
+      try {
+        const response = await apiService.calculateShipping({
+          items,
+          shipping_address: shippingAddress,
+          shipping_method_id: method.id
+        });
+
+        if (response && !response.error) {
+          setShippingCosts(prev => ({
+            ...prev,
+            [method.id]: response.shipping_cost
+          }));
+
+          // Update parent component with selected method cost
+          if (selectedMethod?.id === method.id) {
+            onShippingCostUpdate?.(response.shipping_cost);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to calculate shipping for method ${method.id}:`, error);
+        // Use fallback pricing
+        setShippingCosts(prev => ({
+          ...prev,
+          [method.id]: method.id === 1 ? 50 : method.id === 2 ? 100 : 150
+        }));
+      }
+    }
+
+    setLoading(false);
+  };
 
   const handleMethodSelect = (method) => {
     setSelectedMethod(method);
     onShippingSelect?.(method);
-    onShippingCostUpdate?.(shippingCosts[method.id] || 0);
+
+    const cost = shippingCosts[method.id] || 50;
+    onShippingCostUpdate?.(cost);
+  };
+
+  const getMethodIcon = (methodName) => {
+    if (methodName.toLowerCase().includes('express') || methodName.toLowerCase().includes('fast')) {
+      return '🚀';
+    } else if (methodName.toLowerCase().includes('premium')) {
+      return '⚡';
+    }
+    return '📦';
   };
 
   return (
     <div className="vintage-shipping-container">
       <h2 className="vintage-shipping-title">Choose Your Delivery</h2>
-      
+
       <div className="shipping-methods-grid">
-        {methods.map((method) => (
+        {shippingMethods.map((method) => (
           <div
             key={method.id}
             className={`shipping-method-card ${
@@ -144,7 +135,7 @@ const VintageShippingSelector = ({
                 />
                 <h3 className="method-name">{method.name}</h3>
               </div>
-              
+
               <div className="method-price">
                 {loading ? (
                   <span className="loading-animation">...</span>
@@ -153,12 +144,12 @@ const VintageShippingSelector = ({
                 )}
               </div>
             </div>
-            
+
             <p className="method-description">{method.description}</p>
-            
+
             <div className="method-timing">
-              <span className="method-icon">{method.icon}</span>
-              <span>{method.estimatedDays}</span>
+              <span className="method-icon">{getMethodIcon(method.name)}</span>
+              <span>{method.estimated_days} {method.estimated_days === 1 ? 'day' : 'days'}</span>
             </div>
           </div>
         ))}
@@ -178,7 +169,7 @@ const VintageShippingSelector = ({
             </div>
             <div className="flex justify-between">
               <span>Estimated:</span>
-              <span className="font-medium">{selectedMethod.estimatedDays}</span>
+              <span className="font-medium">{selectedMethod.estimated_days} {selectedMethod.estimated_days === 1 ? 'day' : 'days'}</span>
             </div>
           </div>
         </div>

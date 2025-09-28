@@ -28,7 +28,7 @@ export const ToastProvider = ({ children }) => {
     };
   }, []);
 
-  const addToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 5000) => {
+  const addToast = useCallback((message, type = TOAST_TYPES.INFO, duration = 3000) => {
     const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const toast = { id, message, type, duration };
 

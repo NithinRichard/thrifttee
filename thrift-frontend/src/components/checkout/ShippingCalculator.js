@@ -223,6 +223,8 @@ const ShippingCalculator = ({ cartItems, onShippingCalculated, disabled = false 
               <option value="PY">Puducherry</option>
               <option value="LD">Lakshadweep</option>
               <option value="AN">Andaman and Nicobar Islands</option>
+              <option value="DN">Dadra and Nagar Haveli</option>
+              <option value="CH">Chandigarh</option>
             </select>
             {validationErrors.state && (
               <p className="text-red-500 text-xs mt-1">{validationErrors.state}</p>
