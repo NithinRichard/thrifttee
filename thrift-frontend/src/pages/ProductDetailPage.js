@@ -10,6 +10,8 @@ import CReport from '../components/creport';
 import ProductReviews from '../components/product/ProductReviews';
 import { VintageCountdownTimer, VintageReservationWarning, VintageExpirationNotice } from '../components/reservation';
 import useReservation from '../hooks/useReservation';
+import ImageZoom from '../components/ui/ImageZoom';
+import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
 import { formatINR } from '../utils/currency';
 import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
 
@@ -23,6 +25,8 @@ const ProductDetailPage = () => {
   const [error, setError] = useState(null);
   
   const { reservation, createReservation, extendReservation, loading, error: reservationError } = useReservation(product?.id);
+  
+  useRecentlyViewed(product);
 
   const getConditionBadgeClass = (condition) => {
     const badgeClasses = {
@@ -84,7 +88,12 @@ const ProductDetailPage = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [slug]); // Remove actions from dependencies to prevent unnecessary re-runs
 
-  const isAvailable = product?.is_available !== false && (product?.quantity > 0);
+  const [productState, setProductState] = useState(product);
+  const isAvailable = productState?.is_available !== false && (productState?.quantity > 0);
+  
+  useEffect(() => {
+    setProductState(product);
+  }, [product]);
 
   const handleAddToCart = async (e) => {
     if (e) {
@@ -96,15 +105,28 @@ const ProductDetailPage = () => {
       setError('This item is currently out of stock');
       return;
     }
-    if (product) {
+    if (productState) {
       // Check if item is reserved by someone else
       if (reservation?.is_reserved && !reservation?.is_own_reservation) {
         setError('This item is currently held by another customer');
         return;
       }
-      // Remove quantity from product to avoid confusion
-      const { quantity: _, ...productWithoutQuantity } = product;
-      await actions.addToCart(product); // Pass original product object, not productWithoutQuantity
+      
+      try {
+        await actions.addToCart(productState);
+        // Refresh product data after successful add to cart
+        const updatedProduct = await apiService.getProductBySlug(slug);
+        setProductState(updatedProduct);
+      } catch (error) {
+        // Error is already handled in AppContext with toast
+        // Refresh product data to get updated stock info
+        try {
+          const updatedProduct = await apiService.getProductBySlug(slug);
+          setProductState(updatedProduct);
+        } catch (refreshError) {
+          console.warn('Failed to refresh product data:', refreshError);
+        }
+      }
     }
   };
 
@@ -169,12 +191,13 @@ const ProductDetailPage = () => {
               initial={{ opacity: 0, x: -50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
+
             >
               <div className="bg-white p-4 rounded-lg shadow-lg">
-                <img
+                <ImageZoom
                   src={(product.all_images && product.all_images[0]) || product.primary_image || DEFAULT_PRODUCT_IMAGE}
                   alt={product.title}
-                  className="w-full h-auto object-cover rounded-lg"
+                  className="w-full h-96 rounded-lg"
                 />
 
                 {/* Image Gallery Thumbnails */}
@@ -207,12 +230,16 @@ const ProductDetailPage = () => {
               initial={{ opacity: 0, x: 50 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.6, delay: 0.4 }}
+              className="space-y-6"
             >
-              <h1 className="text-4xl font-vintage font-bold text-gray-900 mb-4">
-                {product.title}
-              </h1>
-              <div className="text-3xl font-bold text-vintage-600 mb-6">
-                {formatINR(product.price)}
+              <div>
+                <h1 className="text-3xl font-vintage font-bold text-gray-900 mb-4">
+                  {product.title}
+                </h1>
+                <div className="text-2xl font-bold text-vintage-600 mb-4">
+                  {formatINR(product.price)}
+                </div>
+
               </div>
               <p className="text-gray-700 text-lg mb-8">
                 {product.description}
@@ -272,13 +299,13 @@ const ProductDetailPage = () => {
                   <div className="text-gray-800">
                     {reservation?.available_quantity !== undefined ? (
                       reservation.available_quantity > 1 ?
-                        `${reservation.available_quantity} of ${reservation.total_quantity || product.quantity} available` :
+                        `${reservation.available_quantity} of ${reservation.total_quantity || productState.quantity} available` :
                         reservation.available_quantity === 1 ?
-                          `${reservation.available_quantity} of ${reservation.total_quantity || product.quantity} available` :
+                          `${reservation.available_quantity} of ${reservation.total_quantity || productState.quantity} available` :
                           'Out of stock'
                     ) : (
                       isAvailable ?
-                        (product.quantity > 1 ? `${product.quantity} available` : 'Unique item') :
+                        (productState.quantity > 1 ? `${productState.quantity} available` : 'Unique item') :
                         'Out of Stock'
                     )}
                   </div>
@@ -375,6 +402,8 @@ const ProductDetailPage = () => {
                 </button>
               </div>
             </motion.div>
+            
+
           </div>
         </motion.div>
 

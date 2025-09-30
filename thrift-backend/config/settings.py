@@ -143,6 +143,11 @@ CORS_ALLOW_CREDENTIALS = True
 STRIPE_PUBLISHABLE_KEY = config('STRIPE_PUBLISHABLE_KEY', default='')
 STRIPE_SECRET_KEY = config('STRIPE_SECRET_KEY', default='')
 
+# Razorpay settings
+RAZORPAY_KEY_ID = config('RAZORPAY_KEY_ID', default='rzp_test_1LkgCKbXRICfuu')
+RAZORPAY_KEY_SECRET = config('RAZORPAY_KEY_SECRET', default='1mXjBWGvebzUPNi3HcmmXX8I')
+RAZORPAY_WEBHOOK_SECRET = config('RAZORPAY_WEBHOOK_SECRET', default='test_webhook_secret')
+
 # Celery settings
 CELERY_BROKER_URL = config('REDIS_URL', default='redis://localhost:6379/0')
 CELERY_RESULT_BACKEND = config('REDIS_URL', default='redis://localhost:6379/0')

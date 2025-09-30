@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useMemo } from 'react';
 import { useApp } from '../../contexts/AppContext';
+import QuickView from '../ui/QuickView';
 import { formatINR } from '../../utils/currency';
 import { DEFAULT_PRODUCT_IMAGE } from '../../utils/media';
 
 const ProductCard = ({ product }) => {
   const { state, actions } = useApp();
+  const [showQuickView, setShowQuickView] = useState(false);
 
   const isInWishlist = useMemo(() => {
     return (state.wishlist || []).some((item) => item.id === product.id);
@@ -54,7 +56,7 @@ const ProductCard = ({ product }) => {
     <motion.div
       whileHover={{ y: -5 }}
       transition={{ duration: 0.3 }}
-      className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300"
+      className="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 group"
     >
       <Link to={`/products/${product.slug}`}>
         <div className="relative overflow-hidden">
@@ -64,33 +66,18 @@ const ProductCard = ({ product }) => {
             className="w-full h-48 sm:h-56 md:h-64 object-cover object-center hover:scale-105 transition-transform duration-300"
           />
 
-          {/* Overlay for quick actions */}
-          <div className="absolute inset-0 bg-black bg-opacity-0 hover:bg-opacity-30 transition-all duration-300 flex items-center justify-center">
-            <div className="opacity-0 hover:opacity-100 transition-opacity duration-300 flex flex-col sm:flex-row gap-2">
-              <button
-                onClick={handleAddToCart}
-                disabled={!isAvailable}
-                className={`px-3 py-2 rounded-full text-sm font-semibold transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
-                  isAvailable
-                    ? 'bg-white text-gray-900 hover:bg-gray-100'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {isAvailable ? 'Add to Cart' : 'Out of Stock'}
-              </button>
-              <button
-                onClick={handleToggleWishlist}
-                className={`px-3 py-2 rounded-full text-sm font-semibold transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center ${
-                  isAvailable
-                    ? (isInWishlist ? 'bg-red-50 text-red-500' : 'bg-white text-gray-900')
-                    : 'bg-gray-200 text-gray-400'
-                }`}
-                aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
-              >
-                {isInWishlist ? '♥' : '♡'}
-              </button>
-            </div>
-          </div>
+          {/* Quick View Button */}
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              setShowQuickView(true);
+            }}
+            className="absolute top-2 right-2 bg-white bg-opacity-90 hover:bg-opacity-100 text-gray-700 p-2 rounded-full shadow-md transition-all duration-200 z-10"
+            aria-label="Quick view"
+          >
+            👁️
+          </button>
 
           {/* Badges */}
           {product.is_featured && (
@@ -164,12 +151,12 @@ const ProductCard = ({ product }) => {
         </div>
       </Link>
 
-      {/* Quick action buttons - Improved for mobile */}
-      <div className="px-3 md:px-4 pb-3 md:pb-4 flex flex-col sm:flex-row gap-2">
+      {/* Quick action buttons */}
+      <div className="px-3 md:px-4 pb-3 md:pb-4 flex gap-2">
         <button
           onClick={handleAddToCart}
           disabled={!isAvailable}
-          className={`flex-1 py-3 md:py-2 rounded-lg font-semibold transition-colors duration-300 min-h-[44px] text-sm md:text-base ${
+          className={`flex-1 py-2.5 rounded-lg font-semibold transition-colors text-sm ${
             isAvailable
               ? 'bg-vintage-600 text-white hover:bg-vintage-700'
               : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -179,12 +166,18 @@ const ProductCard = ({ product }) => {
         </button>
         <button
           onClick={handleToggleWishlist}
-          className={`px-3 md:px-4 py-3 md:py-2 border border-gray-300 rounded-lg transition-colors duration-300 min-h-[44px] flex items-center justify-center ${isInWishlist ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-gray-50 text-gray-700'}`}
+          className={`px-3 py-2.5 border border-gray-300 rounded-lg transition-colors flex items-center justify-center ${isInWishlist ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'hover:bg-gray-50 text-gray-700'}`}
           aria-label={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
         >
           <span className="text-lg">{isInWishlist ? '♥' : '♡'}</span>
         </button>
       </div>
+      
+      <QuickView
+        product={product}
+        isOpen={showQuickView}
+        onClose={() => setShowQuickView(false)}
+      />
     </motion.div>
   );
 };

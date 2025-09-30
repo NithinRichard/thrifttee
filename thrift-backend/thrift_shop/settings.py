@@ -160,9 +160,9 @@ CORS_ALLOWED_HEADERS = [
 ]
 
 # Razorpay Payment Gateway Configuration
-RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_demo_key_id')
-RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', 'demo_secret_key')
-RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', 'demo_webhook_secret')
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID', 'rzp_test_1LkgCKbXRICfuu')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET', '1mXjBWGvebzUPNi3HcmmXX8I')
+RAZORPAY_WEBHOOK_SECRET = os.getenv('RAZORPAY_WEBHOOK_SECRET', 'test_webhook_secret')
 
 # Payment Settings
 PAYMENT_CURRENCY = 'INR'

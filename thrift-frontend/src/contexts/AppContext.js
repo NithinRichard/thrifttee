@@ -566,16 +566,33 @@ export const AppProvider = ({ children }) => {
     dispatch({ type: actionTypes.SET_FILTERS, payload: filters });
   }, []);
 
-  const addToCart = useCallback(async (item, quantity = 1) => {
-    const validQuantity = validateQuantity(quantity, 1);
+  const refreshProductData = useCallback(async () => {
+    try {
+      if (state.currentProduct?.id) {
+        const updatedProduct = await apiService.getProduct(state.currentProduct.id);
+        dispatch({ type: actionTypes.SET_CURRENT_PRODUCT, payload: updatedProduct });
+      }
+    } catch (error) {
+      console.warn('Failed to refresh product data:', error);
+    }
+  }, [state.currentProduct?.id]);
 
-    const payload = {
-      product_id: item.id ?? item.productId,
-      quantity: validQuantity,
-    };
+  const addToCart = useCallback(async (item, quantity = 1) => {
+    if (!state.isAuthenticated) {
+      toast.showWarning('Please log in to add items to cart.');
+      return;
+    }
+
+    const validQuantity = validateQuantity(quantity, 1);
+    const productId = item.id ?? item.productId;
+
+    if (!productId) {
+      toast.showError('Invalid product. Please try again.');
+      return;
+    }
 
     try {
-      const response = await apiService.addToCart(payload.product_id, payload.quantity);
+      const response = await apiService.addToCart(productId, validQuantity);
 
       dispatch({ type: actionTypes.SET_CART, payload: response });
 
@@ -586,6 +603,9 @@ export const AppProvider = ({ children }) => {
         localStorage.removeItem('localCart');
       }
 
+      // Refresh product data to update availability
+      await refreshProductData();
+
       // Show success toast with item details
       const itemTitle = item.title || item.name || 'Item';
       toast.showSuccess(`Added ${validQuantity} ${validQuantity > 1 ? 'units' : 'unit'} of ${itemTitle} to cart!`);
@@ -593,9 +613,11 @@ export const AppProvider = ({ children }) => {
       console.error('Failed to add item to cart:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Item not available.';
       toast.showError(errorMessage);
-      throw error; // Re-throw to allow calling component to handle if needed
+      
+      // Refresh product data even on error to update availability
+      await refreshProductData();
     }
-  }, [toast]);
+  }, [state.isAuthenticated, toast, refreshProductData]);
 
   const updateCartItem = useCallback(async (itemId, quantity) => {
     try {
@@ -827,17 +849,6 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem('authToken');
     dispatch({ type: actionTypes.LOGOUT_USER });
   }, []);
-
-  const refreshProductData = useCallback(async () => {
-    try {
-      if (state.currentProduct?.id) {
-        const updatedProduct = await apiService.getProduct(state.currentProduct.id);
-        dispatch({ type: actionTypes.SET_CURRENT_PRODUCT, payload: updatedProduct });
-      }
-    } catch (error) {
-      console.warn('Failed to refresh product data:', error);
-    }
-  }, [state.currentProduct?.id]);
 
   // Combine all actions into a single stable object
   const actions = useMemo(() => ({

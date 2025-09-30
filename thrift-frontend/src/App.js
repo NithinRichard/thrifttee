@@ -6,6 +6,8 @@ import { ToastProvider } from './contexts/ToastContext';
 import Header from './components/common/Header';
 import Footer from './components/common/Footer';
 import RazorpayLoader from './components/common/RazorpayLoader';
+import RecentlyViewed from './components/ui/RecentlyViewed';
+import PersistentCart from './components/ui/PersistentCart';
 import HomePage from './pages/HomePage';
 import ProductsPage from './pages/ProductsPage';
 import ProductDetailPage from './pages/ProductDetailPage';
@@ -15,6 +17,7 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import ProfilePage from './pages/ProfilePage';
 import WishlistPage from './pages/WishlistPage';
+
 import './styles/globals.css';
 
 // Create a client
@@ -49,6 +52,8 @@ function App() {
                 </Routes>
               </main>
               <Footer />
+              <RecentlyViewed />
+              <PersistentCart />
             </div>
           </Router>
         </AppProvider>
