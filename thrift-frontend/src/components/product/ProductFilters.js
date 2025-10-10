@@ -1,11 +1,12 @@
-import React from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useApp } from '../../contexts/AppContext';
 
 const ProductFilters = () => {
   const { state, actions } = useApp();
+  const debounceRef = useRef({});
 
-  const handleFilterChange = (filterType, value) => {
+  const handleFilterChange = useCallback((filterType, value) => {
     const newFilters = { ...state.filters };
 
     if (value === '' || value === 'all') {
@@ -14,12 +15,31 @@ const ProductFilters = () => {
       newFilters[filterType] = value;
     }
 
-    actions.setFilters(newFilters);
-  };
+    // Clear existing debounce timer for this filter type
+    if (debounceRef.current[filterType]) {
+      clearTimeout(debounceRef.current[filterType]);
+    }
+
+    // Set new debounce timer
+    debounceRef.current[filterType] = setTimeout(() => {
+      actions.setFilters(newFilters);
+      delete debounceRef.current[filterType];
+    }, 300); // 300ms debounce delay
+  }, [state.filters, actions]);
 
   const clearAllFilters = () => {
+    // Clear all debounce timers
+    Object.values(debounceRef.current).forEach(timer => clearTimeout(timer));
+    debounceRef.current = {};
     actions.setFilters({});
   };
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(debounceRef.current).forEach(timer => clearTimeout(timer));
+    };
+  }, []);
 
   const filterOptions = {
     category: [
@@ -52,6 +72,35 @@ const ProductFilters = () => {
       { value: '500-1000', label: '₹500 - ₹1,000' },
       { value: '1000-2000', label: '₹1,000 - ₹2,000' },
       { value: '2000-3000', label: '₹2,000 - ₹3,000' }
+    ],
+    material: [
+      { value: 'all', label: 'All Materials' },
+      { value: 'cotton', label: '100% Cotton' },
+      { value: 'polyester', label: 'Polyester' },
+      { value: 'blend', label: 'Cotton Blend' },
+      { value: 'wool', label: 'Wool' },
+      { value: 'denim', label: 'Denim' },
+      { value: 'silk', label: 'Silk' }
+    ],
+    era: [
+      { value: 'all', label: 'All Eras' },
+      { value: '1960s', label: '1960s' },
+      { value: '1970s', label: '1970s' },
+      { value: '1980s', label: '1980s' },
+      { value: '1990s', label: '1990s' },
+      { value: '2000s', label: '2000s' },
+      { value: '2010s', label: '2010s' }
+    ],
+    color: [
+      { value: 'all', label: 'All Colors' },
+      { value: 'black', label: 'Black', hex: '#000000' },
+      { value: 'white', label: 'White', hex: '#FFFFFF' },
+      { value: 'gray', label: 'Gray', hex: '#808080' },
+      { value: 'red', label: 'Red', hex: '#DC2626' },
+      { value: 'blue', label: 'Blue', hex: '#2563EB' },
+      { value: 'green', label: 'Green', hex: '#16A34A' },
+      { value: 'yellow', label: 'Yellow', hex: '#EAB308' },
+      { value: 'brown', label: 'Brown', hex: '#92400E' }
     ]
   };
 
@@ -149,6 +198,54 @@ const ProductFilters = () => {
             {filterOptions.price_range.map(option => (
               <option key={option.value} value={option.value}>
                 {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Material Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Material</h4>
+          <select
+            value={state.filters.material || 'all'}
+            onChange={(e) => handleFilterChange('material', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.material.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Era/Decade Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Era</h4>
+          <select
+            value={state.filters.era || 'all'}
+            onChange={(e) => handleFilterChange('era', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.era.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Color Filter */}
+        <div>
+          <h4 className="font-semibold text-gray-700 mb-2 md:mb-3 text-sm md:text-base">Color</h4>
+          <select
+            value={state.filters.color || 'all'}
+            onChange={(e) => handleFilterChange('color', e.target.value)}
+            className="w-full input-field text-sm md:text-base py-2 md:py-3"
+          >
+            {filterOptions.color.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.hex && option.value !== 'all' ? '● ' : ''}{option.label}
               </option>
             ))}
           </select>

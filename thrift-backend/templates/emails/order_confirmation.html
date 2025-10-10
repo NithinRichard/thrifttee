@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f3f4f6;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden;">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #10b981; padding: 30px; text-align: center;">
+                            <h1 style="color: #ffffff; margin: 0; font-size: 32px;">✓ Order Confirmed!</h1>
+                            <p style="color: #f3f4f6; margin: 10px 0 0 0; font-size: 18px;">Thank you for your purchase</p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px 30px;">
+                            <h2 style="color: #1f2937; margin: 0 0 10px 0;">Hi {{ order.user.first_name|default:"there" }},</h2>
+                            <p style="color: #4b5563; line-height: 1.6; margin: 0 0 20px 0;">
+                                Your order has been confirmed and will be shipped soon. We'll send you a tracking number once it's on its way!
+                            </p>
+                            
+                            <!-- Order Details -->
+                            <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px; margin: 20px 0;">
+                                <h3 style="color: #1f2937; margin: 0 0 15px 0;">Order Details</h3>
+                                <table width="100%" cellpadding="5" cellspacing="0">
+                                    <tr>
+                                        <td style="color: #6b7280; font-size: 14px;">Order Number:</td>
+                                        <td style="color: #1f2937; font-weight: bold; text-align: right;">{{ order.order_number }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #6b7280; font-size: 14px;">Order Date:</td>
+                                        <td style="color: #1f2937; text-align: right;">{{ order.created_at|date:"F d, Y" }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td style="color: #6b7280; font-size: 14px;">Payment Method:</td>
+                                        <td style="color: #1f2937; text-align: right;">{{ order.payment_method|title }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            
+                            <!-- Order Items -->
+                            <h3 style="color: #1f2937; margin: 30px 0 15px 0;">Your Items</h3>
+                            <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                                {% for item in order.items.all %}
+                                <div style="margin-bottom: 15px; padding-bottom: 15px; {% if not forloop.last %}border-bottom: 1px solid #e5e7eb;{% endif %}">
+                                    <h4 style="color: #1f2937; margin: 0 0 5px 0; font-size: 16px;">{{ item.tshirt.title }}</h4>
+                                    <p style="color: #6b7280; margin: 0; font-size: 14px;">
+                                        Size: {{ item.size }} | Qty: {{ item.quantity }} | ₹{{ item.price }} each
+                                    </p>
+                                    <p style="color: #8B5A3C; margin: 5px 0 0 0; font-weight: bold;">₹{{ item.total_price }}</p>
+                                </div>
+                                {% endfor %}
+                                
+                                <!-- Order Summary -->
+                                <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #e5e7eb;">
+                                    <table width="100%" cellpadding="5" cellspacing="0">
+                                        <tr>
+                                            <td style="color: #6b7280;">Subtotal:</td>
+                                            <td style="color: #1f2937; text-align: right;">₹{{ order.subtotal }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color: #6b7280;">Shipping:</td>
+                                            <td style="color: #1f2937; text-align: right;">₹{{ order.shipping_cost }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color: #6b7280;">Tax (GST):</td>
+                                            <td style="color: #1f2937; text-align: right;">₹{{ order.tax_amount }}</td>
+                                        </tr>
+                                        <tr>
+                                            <td style="color: #1f2937; font-size: 18px; font-weight: bold; padding-top: 10px;">Total:</td>
+                                            <td style="color: #8B5A3C; font-size: 18px; font-weight: bold; text-align: right; padding-top: 10px;">₹{{ order.total_amount }}</td>
+                                        </tr>
+                                    </table>
+                                </div>
+                            </div>
+                            
+                            <!-- Shipping Address -->
+                            <h3 style="color: #1f2937; margin: 30px 0 15px 0;">Shipping Address</h3>
+                            <div style="background-color: #f9fafb; border-radius: 8px; padding: 20px;">
+                                <p style="color: #1f2937; margin: 0; line-height: 1.6;">
+                                    {{ order.shipping_address.name }}<br>
+                                    {{ order.shipping_address.address }}<br>
+                                    {{ order.shipping_address.city }}, {{ order.shipping_address.state }} {{ order.shipping_address.postal_code }}<br>
+                                    Phone: {{ order.shipping_address.phone }}
+                                </p>
+                            </div>
+                            
+                            <!-- Track Order Button -->
+                            <div style="text-align: center; margin: 30px 0;">
+                                <a href="{{ frontend_url }}/profile" style="display: inline-block; background-color: #8B5A3C; color: #ffffff; text-decoration: none; padding: 15px 40px; border-radius: 6px; font-weight: bold; font-size: 16px;">
+                                    Track Your Order
+                                </a>
+                            </div>
+                            
+                            <p style="color: #6b7280; font-size: 14px; line-height: 1.6; margin: 20px 0 0 0;">
+                                Questions about your order? Contact us at <a href="mailto:support@thriftee.com" style="color: #8B5A3C;">support@thriftee.com</a>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f9fafb; padding: 20px 30px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="color: #6b7280; font-size: 12px; margin: 0 0 10px 0;">
+                                © 2024 Thriftee. All rights reserved.
+                            </p>
+                            <p style="color: #9ca3af; font-size: 11px; margin: 0;">
+                                Need help? Visit our <a href="{{ frontend_url }}/faq" style="color: #8B5A3C;">FAQ</a> or <a href="{{ frontend_url }}/returns" style="color: #8B5A3C;">Returns</a> page
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

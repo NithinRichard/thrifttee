@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../contexts/AppContext';
 import ProductCard from '../components/product/ProductCard';
 import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
+import EmptyState from '../components/ui/EmptyState';
 
 const getDisplayValue = (value, fallback = 'N/A') => {
   if (!value) {
@@ -92,18 +93,15 @@ const WishlistPage = () => {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.6, delay: 0.2 }}
-              className="text-center py-16"
+              className="bg-white rounded-lg shadow-lg"
             >
-              <div className="text-6xl mb-6">❤️</div>
-              <h2 className="text-2xl font-vintage font-bold text-gray-900 mb-4">
-                Your wishlist is empty
-              </h2>
-              <p className="text-gray-600 mb-8 max-w-md mx-auto">
-                Start browsing our collection and add items you love to your wishlist
-              </p>
-              <Link to="/products" className="btn-primary">
-                Browse Products
-              </Link>
+              <EmptyState
+                icon="❤️"
+                title="Your wishlist is empty"
+                message="Save your favorite vintage finds for later and never miss out on unique pieces"
+                ctaText="Discover Products"
+                ctaLink="/products"
+              />
             </motion.div>
           ) : (
             <motion.div

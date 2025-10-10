@@ -1,0 +1,147 @@
+/* Vintage Cart Drawer Styles - Complementary to existing design system */
+
+/* Subtle vintage texture for cart items */
+.vintage-cart-item {
+  background: linear-gradient(135deg, #faf7f0 0%, #f4ede1 100%);
+  border: 1px solid #e8d9c2;
+  box-shadow: 0 2px 4px rgba(139, 69, 19, 0.1);
+}
+
+.vintage-cart-item:hover {
+  box-shadow: 0 4px 8px rgba(139, 69, 19, 0.15);
+  border-color: #dbc19e;
+}
+
+/* Vintage button styling that matches existing btn-primary */
+.vintage-button {
+  background: linear-gradient(135deg, #8B4513 0%, #654321 100%);
+  border: 2px solid #654321;
+  box-shadow: 0 4px 8px rgba(139, 69, 19, 0.3);
+  font-family: 'Playfair Display', serif;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.vintage-button:hover {
+  background: linear-gradient(135deg, #654321 0%, #8B4513 100%);
+  box-shadow: 0 6px 12px rgba(139, 69, 19, 0.4);
+  transform: translateY(-1px);
+}
+
+/* Subtle paper texture for order summary */
+.paper-texture {
+  background:
+    linear-gradient(135deg, #fefcf7 0%, #faf7f0 100%),
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 1px,
+      rgba(139, 69, 19, 0.02) 1px,
+      rgba(139, 69, 19, 0.02) 2px
+    );
+}
+
+/* Vintage border styling */
+.vintage-border {
+  border: 2px solid #D2B48C;
+  box-shadow: inset 0 1px 2px rgba(139, 69, 19, 0.1);
+}
+
+/* Subtle aged paper effect */
+.aged-paper {
+  background:
+    radial-gradient(circle at 20% 30%, rgba(139, 69, 19, 0.05) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(210, 180, 140, 0.03) 0%, transparent 30%),
+    linear-gradient(135deg, #faf7f0 0%, #f4ede1 100%);
+}
+
+/* Vintage header styling */
+.vintage-header {
+  background: linear-gradient(135deg, #f4ede1 0%, #e8d9c2 50%, #f4ede1 100%);
+  border-bottom: 3px solid #D2B48C;
+}
+
+/* Complementary animations that match existing system */
+@keyframes vintageSlideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes vintageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes vintageScaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Cart drawer specific animations */
+.cart-drawer-enter {
+  animation: vintageSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.cart-item-enter {
+  animation: vintageFadeIn 0.4s ease-out;
+}
+
+.cart-summary-enter {
+  animation: vintageScaleIn 0.5s ease-out;
+}
+
+/* Vintage focus states */
+.vintage-focus:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(139, 69, 19, 0.3), 0 0 0 1px #8B4513;
+  border-color: #8B4513;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 640px) {
+  .vintage-cart-item {
+    margin: 0 -1rem;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+
+  .vintage-header {
+    padding: 1rem;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .vintage-cart-item {
+    background: #ffffff;
+    border: 2px solid #333333;
+  }
+
+  .vintage-button {
+    background: #333333;
+    border-color: #333333;
+  }
+
+  .aged-paper {
+    background: #ffffff;
+  }
+}

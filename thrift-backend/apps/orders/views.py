@@ -1,5 +1,5 @@
 from rest_framework import generics, status, viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
 from rest_framework.decorators import action, api_view, permission_classes
 from django.shortcuts import get_object_or_404
@@ -8,7 +8,11 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import HttpResponse, JsonResponse
 from django.utils.decorators import method_decorator
 from django.db import transaction
+from django.contrib.auth.models import User
+from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from decimal import Decimal
+from apps.products.models import TShirt
 import razorpay
 import json
 import hmac
@@ -21,6 +25,7 @@ from .serializers import (
 from apps.cart.models import Cart
 from .models import Order, OrderItem
 from apps.products.utils import reduce_inventory_for_order
+from .inventory import InventoryManager
 
 class OrderViewSet(viewsets.ModelViewSet):
     """Order viewset with Razorpay payment integration."""
@@ -101,21 +106,33 @@ class OrderViewSet(viewsets.ModelViewSet):
             ).first()
 
             if existing_pending_order:
-                return Response({
-                    'razorpay_order_id': existing_pending_order.razorpay_order_id,
-                    'amount': int(existing_pending_order.total_amount * 100),
-                    'currency': existing_pending_order.currency,
-                    'receipt': f'order_{request.user.id}_{int(existing_pending_order.created_at.timestamp())}',
-                    'key': settings.RAZORPAY_KEY_ID,
-                    'order_id': existing_pending_order.id,
-                    'order_details': {
-                        'subtotal': existing_pending_order.subtotal,
-                        'tax_amount': existing_pending_order.tax_amount,
-                        'shipping_amount': existing_pending_order.shipping_amount,
-                        'total_amount': existing_pending_order.total_amount
-                    },
-                    'message': 'Using existing pending order'
-                })
+                # Verify order status with Razorpay to ensure it's actually pending
+                try:
+                    razorpay_order = self.razorpay_client.order.fetch(existing_pending_order.razorpay_order_id)
+                    if razorpay_order.get('status') == 'paid':
+                        # Order was already paid, update local status and create new order
+                        existing_pending_order.payment_status = 'completed'
+                        existing_pending_order.status = 'processing'
+                        existing_pending_order.save()
+                    else:
+                        # Order is still pending, reuse it
+                        return Response({
+                            'razorpay_order_id': existing_pending_order.razorpay_order_id,
+                            'amount': int(existing_pending_order.total_amount * 100),
+                            'currency': existing_pending_order.currency,
+                            'receipt': f'order_{request.user.id}_{int(existing_pending_order.created_at.timestamp())}',
+                            'key': settings.RAZORPAY_KEY_ID,
+                            'order_id': existing_pending_order.id,
+                            'order_details': {
+                                'subtotal': existing_pending_order.subtotal,
+                                'tax_amount': existing_pending_order.tax_amount,
+                                'shipping_amount': existing_pending_order.shipping_amount,
+                                'total_amount': existing_pending_order.total_amount
+                            },
+                            'message': 'Using existing pending order'
+                        })
+                except Exception as e:
+                    print(f'Error verifying Razorpay order: {str(e)}')
 
             # Calculate totals
             subtotal = cart.total_price
@@ -209,7 +226,7 @@ class OrderViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def verify_payment(self, request):
         """Verify Razorpay payment status."""
         try:
@@ -225,7 +242,13 @@ class OrderViewSet(viewsets.ModelViewSet):
 
             # Get order by Razorpay order ID
             try:
-                order = Order.objects.get(razorpay_order_id=razorpay_order_id, user=request.user)
+                order = Order.objects.get(razorpay_order_id=razorpay_order_id)
+                # If authenticated, enforce ownership
+                if request.user.is_authenticated and order.user_id != request.user.id:
+                    return Response(
+                        {'error': 'Order does not belong to the authenticated user'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
             except Order.DoesNotExist:
                 return Response(
                     {'error': 'Order not found'},
@@ -256,19 +279,29 @@ class OrderViewSet(viewsets.ModelViewSet):
             if payment_data['status'] == 'captured':
                 order.payment_status = 'completed'
                 order.status = 'processing'
-
-                # Reduce product inventory for successful orders
+                
+                # Send order confirmation email
                 try:
-                    inventory_result = reduce_inventory_for_order(order)
-                    # Log inventory reduction details if needed
-                    print(f"Inventory reduced for order {order.order_number}: {inventory_result['total_products_updated']} products updated")
-                except ValueError as e:
-                    # Log the error but don't fail the payment verification
-                    # The order is still valid even if inventory update fails
-                    print(f"Warning: Inventory reduction failed for order {order.order_number}: {str(e)}")
+                    html_message = render_to_string('emails/order_confirmation.html', {
+                        'order': order,
+                        'frontend_url': settings.FRONTEND_URL
+                    })
+                    send_mail(
+                        subject=f'Order Confirmation - {order.order_number}',
+                        message=f'Your order {order.order_number} has been confirmed!',
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[order.user.email],
+                        html_message=html_message,
+                        fail_silently=True,
+                    )
                 except Exception as e:
-                    # Catch any other errors during inventory reduction
-                    print(f"Warning: Unexpected error during inventory reduction for order {order.order_number}: {str(e)}")
+                    print(f"Failed to send order confirmation email: {str(e)}")
+
+                # Reduce product inventory using InventoryManager
+                for item in order.items.all():
+                    success, error = InventoryManager.reserve_stock(item.tshirt.id, item.quantity)
+                    if not success:
+                        print(f"Warning: Inventory update failed for {item.product_title}: {error}")
 
                 # Create Shiprocket order for successful payments
                 try:
@@ -328,12 +361,22 @@ class OrderViewSet(viewsets.ModelViewSet):
                     print(f"❌ Error creating Shiprocket order for order {order.order_number}: {str(e)}")
                     # Don't fail the payment verification if Shiprocket fails
 
-                # Clear user's cart only after successful payment
+                # Clear cart only after successful payment
+                # Try authenticated user's cart, then order user's cart
+                cleared = False
                 try:
-                    cart = Cart.objects.get(user=request.user)
-                    cart.items.all().delete()
+                    if request.user.is_authenticated:
+                        cart = Cart.objects.get(user=request.user)
+                        cart.items.all().delete()
+                        cleared = True
                 except Cart.DoesNotExist:
-                    pass  # Cart already cleared or doesn't exist
+                    pass
+                if not cleared:
+                    try:
+                        cart = Cart.objects.get(user=order.user)
+                        cart.items.all().delete()
+                    except Cart.DoesNotExist:
+                        pass
             elif payment_data['status'] == 'failed':
                 order.payment_status = 'failed'
             else:
@@ -628,3 +671,270 @@ class LegacyOrderViews:
 
         except Exception as e:
             return HttpResponse(f'Webhook processing error: {str(e)}', status=500)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_guest_order(request):
+    """Create an order for a guest user (unauthenticated).
+
+    Expected payload:
+    {
+        "email": "guest@example.com",
+        "shipping_address": {
+            "name": "John Doe",
+            "phone": "9876543210",
+            "address": "123 Street",
+            "city": "City",
+            "state": "ST",
+            "postal_code": "123456",
+            "country": "IN"
+        },
+        "items": [
+            {"product": 1, "quantity": 2, "price": 499.99, "title": "...", "brand": "...", "size": "M", "color": "Black"},
+            ...
+        ],
+        "subtotal": 0, "tax_amount": 0, "shipping_amount": 0, "total_amount": 0,
+        "is_guest_checkout": true
+    }
+    """
+    try:
+        data = request.data or {}
+        email = (data.get('email') or '').strip()
+        shipping = data.get('shipping_address') or {}
+        items = data.get('items') or data.get('order_items') or []
+
+        if not email:
+            return Response({'success': False, 'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure we have at least one item
+        if not items:
+            return Response({'success': False, 'message': 'No items provided for order'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create or get a pseudo-user for guest by email
+        first_name = ''
+        last_name = ''
+        full_name = (shipping.get('name') or '').strip()
+        if full_name:
+            parts = full_name.split()
+            first_name = parts[0]
+            last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
+
+        user = User.objects.filter(email=email).first()
+        if not user:
+            base_username = email.split('@')[0][:20] or 'guest'
+            suffix = hashlib.sha1(email.encode()).hexdigest()[:6]
+            username = f"{base_username}_{suffix}"
+            user = User.objects.create(username=username, email=email, first_name=first_name, last_name=last_name)
+            user.set_unusable_password()
+            user.save()
+
+        # Build order monetary totals
+        try:
+            subtotal = Decimal(str(data.get('subtotal'))) if data.get('subtotal') is not None else None
+        except Exception:
+            subtotal = None
+
+        # If subtotal not provided, derive from items (prefer DB price if product id present)
+        computed_subtotal = Decimal('0.00')
+        normalized_items = []
+        for it in items:
+            product_id = it.get('product') or it.get('product_id') or it.get('tshirt')
+            quantity = int(it.get('quantity') or 1)
+            title = it.get('title') or ''
+            brand = it.get('brand') or ''
+            size = it.get('size') or ''
+            color = it.get('color') or ''
+
+            unit_price = it.get('price')
+            tshirt_obj = None
+            if product_id:
+                try:
+                    tshirt_obj = TShirt.objects.get(id=product_id)
+                    # Prefer DB price
+                    unit_price = tshirt_obj.price
+                    title = title or tshirt_obj.title
+                    brand = brand or (getattr(tshirt_obj.brand, 'name', None) or str(getattr(tshirt_obj, 'brand', '')))
+                    size = size or tshirt_obj.size
+                    color = color or tshirt_obj.color
+                except TShirt.DoesNotExist:
+                    tshirt_obj = None
+
+            # Fallback if price still missing
+            try:
+                unit_price = Decimal(str(unit_price))
+            except Exception:
+                unit_price = Decimal('0.00')
+
+            line_total = unit_price * Decimal(str(quantity))
+            computed_subtotal += line_total
+            normalized_items.append({
+                'tshirt': tshirt_obj,
+                'product_id': product_id,
+                'quantity': quantity,
+                'price': unit_price,
+                'title': title,
+                'brand': brand,
+                'size': size,
+                'color': color,
+            })
+
+        if subtotal is None:
+            subtotal = computed_subtotal.quantize(Decimal('0.01'))
+
+        # Tax and shipping defaults
+        try:
+            tax_amount = Decimal(str(data.get('tax_amount'))) if data.get('tax_amount') is not None else None
+        except Exception:
+            tax_amount = None
+        if tax_amount is None:
+            tax_amount = (subtotal * Decimal('0.18')).quantize(Decimal('0.01'))
+
+        try:
+            shipping_amount = Decimal(str(data.get('shipping_amount'))) if data.get('shipping_amount') is not None else None
+        except Exception:
+            shipping_amount = None
+        if shipping_amount is None:
+            shipping_amount = Decimal('0.00') if subtotal >= Decimal('1000') else Decimal('50.00')
+
+        try:
+            total_amount = Decimal(str(data.get('total_amount'))) if data.get('total_amount') is not None else None
+        except Exception:
+            total_amount = None
+        if total_amount is None:
+            total_amount = (subtotal + tax_amount + shipping_amount).quantize(Decimal('0.01'))
+
+        # Create order and items atomically
+        with transaction.atomic():
+            order = Order.objects.create(
+                user=user,
+                status='pending',
+                payment_status='pending',
+                subtotal=subtotal,
+                tax_amount=tax_amount,
+                shipping_amount=shipping_amount,
+                total_amount=total_amount,
+                shipping_name=full_name or user.get_full_name() or user.username,
+                shipping_email=email,
+                shipping_phone=str(shipping.get('phone') or ''),
+                shipping_address_line1=str(shipping.get('address') or ''),
+                shipping_city=str(shipping.get('city') or ''),
+                shipping_state=str(shipping.get('state') or ''),
+                shipping_postal_code=str(shipping.get('postal_code') or ''),
+                shipping_country='India',
+                payment_method='razorpay',
+                currency='INR'
+            )
+
+            for ni in normalized_items:
+                OrderItem.objects.create(
+                    order=order,
+                    tshirt=ni['tshirt'],
+                    quantity=ni['quantity'],
+                    price=ni['price'],
+                    product_title=ni['title'] or 'Unknown Product',
+                    product_brand=str(ni['brand'] or ''),
+                    product_size=str(ni['size'] or ''),
+                    product_color=str(ni['color'] or '')
+                )
+
+        return Response({'success': True, 'order_id': order.id}, status=status.HTTP_201_CREATED)
+
+    except Exception as e:
+        return Response({'success': False, 'message': f'Failed to create guest order: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_return_request(request):
+    """Create a return/exchange request"""
+    from django.core.mail import send_mail
+    from .models import ReturnRequest
+    
+    data = request.data
+    
+    try:
+        order = Order.objects.get(
+            order_number=data.get('orderId'),
+            user=request.user
+        )
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    return_request = ReturnRequest.objects.create(
+        order=order,
+        user=request.user,
+        reason=data.get('reason'),
+        type=data.get('type', 'return'),
+        comments=data.get('comments', '')
+    )
+    
+    send_mail(
+        subject=f'Return Request Received - {order.order_number}',
+        message=f'We received your return request. We\'ll email you a return label within 24 hours.',
+        from_email=settings.DEFAULT_FROM_EMAIL,
+        recipient_list=[request.user.email],
+        fail_silently=True,
+    )
+    
+    return Response({
+        'message': 'Return request submitted successfully',
+        'request_id': return_request.id
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def create_guest_payment(request):
+    """Create a Razorpay order for a guest order (unauthenticated)."""
+    try:
+        order_id = request.data.get('order_id')
+        if not order_id:
+            return Response({'success': False, 'message': 'order_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            order = Order.objects.get(id=order_id)
+        except Order.DoesNotExist:
+            return Response({'success': False, 'message': 'Order not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Initialize Razorpay client
+        razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+
+        amount_in_paise = int(order.total_amount * Decimal('100'))
+        receipt = f"guest_order_{order.id}_{int(order.created_at.timestamp())}"
+
+        razorpay_order = razorpay_client.order.create(data={
+            'amount': amount_in_paise,
+            'currency': 'INR',
+            'receipt': receipt,
+            'notes': {
+                'order_id': str(order.id),
+                'user_id': order.user.id,
+            }
+        })
+
+        order.razorpay_order_id = razorpay_order['id']
+        order.payment_status = 'pending'
+        order.save(update_fields=['razorpay_order_id', 'payment_status', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'razorpay_order_id': razorpay_order['id'],
+            'amount': razorpay_order['amount'],
+            'currency': razorpay_order['currency'],
+            'receipt': razorpay_order['receipt'],
+            'key': settings.RAZORPAY_KEY_ID,
+            'order_id': order.id,
+            'order_details': {
+                'subtotal': order.subtotal,
+                'tax_amount': order.tax_amount,
+                'shipping_amount': order.shipping_amount,
+                'total_amount': order.total_amount
+            }
+        }, status=status.HTTP_200_OK)
+
+    except Exception as e:
+        return Response({'success': False, 'message': f'Failed to create guest payment: {str(e)}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

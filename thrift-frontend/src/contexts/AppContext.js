@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useReducer, useEffect, useCallback, useMemo } from 'react';
 import apiService from '../services/api';
 import { validateQuantity } from '../utils/validation';
+import { syncSavedSearchesOnLogin } from '../utils/savedSearches';
 import { useToast } from './ToastContext';
 
 // Initial state
 const initialState = {
   // Products
   products: [],
+  savedSearches: [],
   featuredProducts: [],
   currentProduct: null,
   brands: [],
@@ -390,10 +392,11 @@ const appReducer = (state, action) => {
 };
 
 // Create context
-const AppContext = createContext();
+const AppContext = createContext({
+  openCartDrawer: () => {}
+});
 
-// Context provider component
-export const AppProvider = ({ children }) => {
+export const AppProvider = ({ children, openCartDrawer }) => {
   const [state, dispatch] = useReducer(appReducer, initialState);
   const toast = useToast();
 
@@ -578,11 +581,6 @@ export const AppProvider = ({ children }) => {
   }, [state.currentProduct?.id]);
 
   const addToCart = useCallback(async (item, quantity = 1) => {
-    if (!state.isAuthenticated) {
-      toast.showWarning('Please log in to add items to cart.');
-      return;
-    }
-
     const validQuantity = validateQuantity(quantity, 1);
     const productId = item.id ?? item.productId;
 
@@ -591,6 +589,64 @@ export const AppProvider = ({ children }) => {
       return;
     }
 
+    // For guest users, use local storage cart
+    if (!state.isAuthenticated) {
+      try {
+        // Get existing local cart
+        const localCart = JSON.parse(localStorage.getItem('localCart') || '[]');
+
+        // Check if item already exists in cart
+        const existingItemIndex = localCart.findIndex(cartItem =>
+          (cartItem.cartItemId && cartItem.cartItemId === productId) ||
+          (cartItem.productId && cartItem.productId === productId) ||
+          cartItem.id === productId
+        );
+
+        const cartItem = {
+          id: productId,
+          productId: productId,
+          title: item.title || item.name,
+          price: item.price,
+          quantity: validQuantity,
+          image: item.primary_image || (item.all_images && item.all_images[0]),
+          size: item.size,
+          brand: item.brand,
+          category: item.category,
+          slug: item.slug
+        };
+
+        if (existingItemIndex >= 0) {
+          // Update existing item quantity
+          localCart[existingItemIndex].quantity = validQuantity;
+        } else {
+          // Add new item to cart
+          localCart.push(cartItem);
+        }
+
+        // Save to localStorage
+        localStorage.setItem('localCart', JSON.stringify(localCart));
+
+        // Update state
+        dispatch({ type: actionTypes.SET_CART, payload: localCart });
+
+        // Show success message
+        const itemTitle = item.title || item.name || 'Item';
+        toast.showSuccess(`Added ${validQuantity} ${validQuantity > 1 ? 'units' : 'unit'} of ${itemTitle} to cart!`);
+
+        // Open cart drawer
+        if (openCartDrawer) {
+          openCartDrawer();
+        }
+
+        return;
+      } catch (error) {
+        console.error('Failed to add item to local cart:', error);
+        toast.showError('Failed to add item to cart. Please try again.');
+        return;
+      }
+    }
+
+    // For authenticated users, use backend API
     try {
       const response = await apiService.addToCart(productId, validQuantity);
 
@@ -609,19 +665,59 @@ export const AppProvider = ({ children }) => {
       // Show success toast with item details
       const itemTitle = item.title || item.name || 'Item';
       toast.showSuccess(`Added ${validQuantity} ${validQuantity > 1 ? 'units' : 'unit'} of ${itemTitle} to cart!`);
+
+      // Open cart drawer to show the added item
+      if (openCartDrawer) {
+        openCartDrawer();
+      }
     } catch (error) {
       console.error('Failed to add item to cart:', error);
       const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message || 'Item not available.';
       toast.showError(errorMessage);
-      
+
       // Refresh product data even on error to update availability
       await refreshProductData();
     }
-  }, [state.isAuthenticated, toast, refreshProductData]);
+  }, [state.isAuthenticated, toast, refreshProductData, openCartDrawer]);
 
   const updateCartItem = useCallback(async (itemId, quantity) => {
+    const validQuantity = validateQuantity(quantity, 1);
+
+    // For guest users, update local storage cart
+    if (!state.isAuthenticated) {
+      try {
+        const localCart = JSON.parse(localStorage.getItem('localCart') || '[]');
+
+        // Find and update the item
+        const updatedCart = localCart.map(item => {
+          const matches =
+            (item.cartItemId && item.cartItemId === itemId) ||
+            (item.productId && item.productId === itemId) ||
+            item.id === itemId;
+
+          if (matches) {
+            return { ...item, quantity: validQuantity };
+          }
+          return item;
+        });
+
+        // Save to localStorage
+        localStorage.setItem('localCart', JSON.stringify(updatedCart));
+
+        // Update state
+        dispatch({ type: actionTypes.SET_CART, payload: updatedCart });
+
+        toast.showSuccess('Cart updated successfully!');
+        return;
+      } catch (error) {
+        console.error('Failed to update local cart:', error);
+        toast.showError('Failed to update cart. Please try again.');
+        return;
+      }
+    }
+
+    // For authenticated users, use backend API
     try {
-      const validQuantity = validateQuantity(quantity, 1);
       const response = await apiService.updateCartItem(itemId, validQuantity);
 
       dispatch({ type: actionTypes.SET_CART, payload: response });
@@ -635,9 +731,43 @@ export const AppProvider = ({ children }) => {
       const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Quantity exceeds available stock.';
       toast.showError(errorMessage);
     }
-  }, [toast]);
+  }, [state.isAuthenticated, toast]);
 
   const removeFromCart = useCallback(async (itemId) => {
+    // For guest users, remove from local storage cart
+    if (!state.isAuthenticated) {
+      try {
+        const localCart = JSON.parse(localStorage.getItem('localCart') || '[]');
+
+        // Filter out the item to be removed
+        const updatedCart = localCart.filter(item => {
+          const matches =
+            (item.cartItemId && item.cartItemId === itemId) ||
+            (item.productId && item.productId === itemId) ||
+            item.id === itemId;
+          return !matches;
+        });
+
+        // Save to localStorage
+        if (updatedCart.length > 0) {
+          localStorage.setItem('localCart', JSON.stringify(updatedCart));
+        } else {
+          localStorage.removeItem('localCart');
+        }
+
+        // Update state
+        dispatch({ type: actionTypes.REMOVE_FROM_CART, payload: itemId });
+
+        toast.showSuccess('Item removed from cart!');
+        return;
+      } catch (error) {
+        console.error('Failed to remove item from local cart:', error);
+        toast.showError('Failed to remove item from cart. Please try again.');
+        return;
+      }
+    }
+
+    // For authenticated users, try backend API first, fallback to local
     try {
       let response = null;
       try {
@@ -679,7 +809,7 @@ export const AppProvider = ({ children }) => {
       console.error('Failed to remove item from cart:', error);
       toast.showError('Failed to remove item from cart. Please try again.');
     }
-  }, [toast]);
+  }, [state.isAuthenticated, toast, state.cart]);
 
   const clearCart = useCallback(async () => {
     try {
@@ -786,6 +916,36 @@ export const AppProvider = ({ children }) => {
 
   const login = useCallback(async (user, token) => {
     localStorage.setItem('authToken', token);
+
+    // Migrate recently viewed: merge guest into the new user's key and clear prior user's key
+    try {
+      const guestKey = 'recentlyViewed_guest';
+      const prevUserId = state?.user?.id;
+      const newUserId = user?.id;
+      const newKey = newUserId ? `recentlyViewed_${newUserId}` : guestKey;
+
+      // Clear previous user's key if switching accounts
+      if (prevUserId && prevUserId !== newUserId) {
+        localStorage.removeItem(`recentlyViewed_${prevUserId}`);
+      }
+
+      // Merge guest items into new user's key
+      const guestItems = JSON.parse(localStorage.getItem(guestKey) || '[]');
+      const userItems = JSON.parse(localStorage.getItem(newKey) || '[]');
+      const combinedMap = new Map();
+      ;[...guestItems, ...userItems]
+        .sort((a, b) => (b?.timestamp || 0) - (a?.timestamp || 0))
+        .forEach(item => {
+          if (item && item.id != null) combinedMap.set(item.id, item);
+        });
+      const merged = Array.from(combinedMap.values()).slice(0, 10);
+      localStorage.setItem(newKey, JSON.stringify(merged));
+      // Clear guest after merge
+      localStorage.removeItem(guestKey);
+    } catch (e) {
+      console.warn('Failed to migrate recently viewed on login:', e);
+    }
+
     dispatch({ type: actionTypes.SET_USER, payload: user });
 
     // Load user's cart after successful login
@@ -804,7 +964,14 @@ export const AppProvider = ({ children }) => {
     } catch (error) {
       console.warn('Failed to load wishlist after login:', error.message);
     }
-  }, [toast]);
+
+    // Sync saved searches from local storage to backend
+    try {
+      await syncSavedSearchesOnLogin(user.email);
+    } catch (error) {
+      console.warn('Failed to sync saved searches after login:', error.message);
+    }
+  }, [toast, state?.user?.id]);
 
   const refreshAuth = useCallback(async () => {
     try {
@@ -846,9 +1013,28 @@ export const AppProvider = ({ children }) => {
   }, []);
 
   const logout = useCallback(() => {
+    // Clear auth token
     localStorage.removeItem('authToken');
+
+    // Clear ALL recently viewed entries (user-specific and guest) to avoid bleed-through after logout
+    try {
+      const keys = Object.keys(localStorage);
+      keys.forEach((key) => {
+        if (key === 'recentlyViewed_guest' || key.startsWith('recentlyViewed_')) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch (e) {
+      console.warn('Failed to clear recently viewed on logout:', e);
+      // Fallback: clear explicit keys
+      if (state.user?.id) {
+        localStorage.removeItem(`recentlyViewed_${state.user.id}`);
+      }
+      localStorage.removeItem('recentlyViewed_guest');
+    }
+
     dispatch({ type: actionTypes.LOGOUT_USER });
-  }, []);
+  }, [state.user?.id]);
 
   // Combine all actions into a single stable object
   const actions = useMemo(() => ({

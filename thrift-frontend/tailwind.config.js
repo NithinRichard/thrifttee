@@ -34,11 +34,15 @@ module.exports = {
       fontFamily: {
         'vintage': ['Georgia', 'serif'],
         'modern': ['Inter', 'sans-serif'],
+        'industrial': ['Courier New', 'Lucida Console', 'monospace'],
+        'typewriter': ['Courier New', 'Lucida Console', 'monospace'],
       },
       animation: {
         'fade-in': 'fadeIn 0.5s ease-in-out',
         'slide-up': 'slideUp 0.5s ease-out',
         'parallax': 'parallax 1s ease-out',
+        'drawer-slide': 'drawerSlideIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
+        'stamp-press': 'stampPress 0.3s ease-in-out',
       },
       keyframes: {
         fadeIn: {
@@ -52,6 +56,15 @@ module.exports = {
         parallax: {
           '0%': { transform: 'translateY(0px)' },
           '100%': { transform: 'translateY(-20px)' },
+        },
+        drawerSlideIn: {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        stampPress: {
+          '0%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(0.98)' },
+          '100%': { transform: 'scale(1)' },
         }
       }
     },

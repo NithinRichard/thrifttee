@@ -17,4 +17,9 @@ urlpatterns = [
     path('wishlist/', views.WishlistView.as_view(), name='wishlist'),
     path('wishlist/add/<int:tshirt_id>/', views.AddToWishlistView.as_view(), name='add-to-wishlist'),
     path('wishlist/remove/<int:tshirt_id>/', views.RemoveFromWishlistView.as_view(), name='remove-from-wishlist'),
+    
+    # Saved search endpoints
+    path('saved_searches/', views.SavedSearchesView.as_view(), name='saved-searches'),
+    path('saved_searches/create/', views.CreateSavedSearchView.as_view(), name='create-saved-search'),
+    path('saved_searches/<int:pk>/delete/', views.DeleteSavedSearchView.as_view(), name='delete-saved-search'),
 ]

@@ -543,7 +543,15 @@ def check_reservation_status(request, product_id):
                 'available_quantity': available_qty + user_reservation.quantity,
                 'total_quantity': product.quantity
             })
-        elif available_qty < product.quantity:
+        elif available_qty == product.quantity:
+            # No reservations in effect; treat as not reserved
+            return Response({
+                'is_reserved': False,
+                'available_quantity': available_qty,
+                'total_quantity': product.quantity
+            })
+        elif available_qty == 0:
+            # Fully reserved by others
             return Response({
                 'is_reserved': True,
                 'is_own_reservation': False,
@@ -551,6 +559,7 @@ def check_reservation_status(request, product_id):
                 'total_quantity': product.quantity
             })
         else:
+            # Partially reserved by others but stock remains; not reserved from the shopper's perspective
             return Response({
                 'is_reserved': False,
                 'available_quantity': available_qty,

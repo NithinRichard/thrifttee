@@ -62,6 +62,27 @@
   100% { transform: rotate(360deg); }
 }
 
+/* Slide-up animation for sticky elements */
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out;
+}
+
+/* Safe area for mobile devices with notches */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 /* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;

@@ -5,8 +5,8 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
-from .models import UserProfile, Wishlist
-from .serializers import UserSerializer, UserProfileSerializer, WishlistSerializer
+from .models import UserProfile, Wishlist, SavedSearch
+from .serializers import UserSerializer, UserProfileSerializer, WishlistSerializer, SavedSearchSerializer
 
 class RegisterView(generics.CreateAPIView):
     """User registration view."""
@@ -53,24 +53,29 @@ class LoginView(generics.GenericAPIView):
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
-        # Allow login with email from frontend
-        if not username and request.data.get('email'):
+
+        # Attempt email-based login if username not provided
+        user = None
+        if not username and request.data.get('email') and password:
             email = request.data.get('email')
-            try:
-                user_obj = User.objects.get(email=email)
-                username = user_obj.username
-            except User.DoesNotExist:
-                username = None
-        
-        if username and password:
+            # Emails may not be unique; try all matching users in a deterministic order
+            qs = User.objects.filter(email=email).order_by('-date_joined', '-id')
+            for candidate in qs:
+                user = authenticate(username=candidate.username, password=password)
+                if user:
+                    break
+
+        # If username provided or email-based auth did not find a match, try direct username auth
+        if user is None and username and password:
             user = authenticate(username=username, password=password)
-            if user:
-                token, created = Token.objects.get_or_create(user=user)
-                return Response({
-                    'user': UserSerializer(user).data,
-                    'token': token.key
-                })
-        
+
+        if user:
+            token, created = Token.objects.get_or_create(user=user)
+            return Response({
+                'user': UserSerializer(user).data,
+                'token': token.key
+            })
+
         return Response({
             'error': 'Invalid credentials'
         }, status=status.HTTP_400_BAD_REQUEST)
@@ -149,3 +154,65 @@ class RemoveFromWishlistView(generics.DestroyAPIView):
             return Response({'message': 'Removed from wishlist'}, status=status.HTTP_200_OK)
         except Wishlist.DoesNotExist:
             return Response({'error': 'Item not in wishlist'}, status=status.HTTP_404_NOT_FOUND)
+
+class SavedSearchesView(generics.ListAPIView):
+    """List user's saved searches."""
+    serializer_class = SavedSearchSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return SavedSearch.objects.filter(user=self.request.user, is_active=True)
+
+class CreateSavedSearchView(generics.CreateAPIView):
+    """Create a new saved search."""
+    serializer_class = SavedSearchSerializer
+    permission_classes = [AllowAny]  # Allow guest users to create saved searches
+
+    def create(self, request, *args, **kwargs):
+        # Check for existing active saved search with same criteria
+        email = request.data.get('email')
+        query = request.data.get('query', '')
+        filters = request.data.get('filters', {})
+
+        if email:
+            existing_search = SavedSearch.objects.filter(
+                email=email,
+                query=query,
+                filters=filters,
+                is_active=True
+            ).first()
+
+            if existing_search:
+                # Return existing search instead of creating duplicate
+                serializer = self.get_serializer(existing_search)
+                return Response(serializer.data, status=status.HTTP_200_OK)
+
+        # Create new saved search
+        serializer = self.get_serializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        saved_search = serializer.save()
+
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+class DeleteSavedSearchView(generics.DestroyAPIView):
+    """Delete a saved search."""
+    permission_classes = [AllowAny]  # Allow guests to delete their own searches
+
+    def get_queryset(self):
+        # For authenticated users, only allow deleting their own searches
+        if self.request.user.is_authenticated:
+            return SavedSearch.objects.filter(user=self.request.user)
+        # For guests, allow deletion by email (less secure but necessary for guest functionality)
+        email = self.request.query_params.get('email')
+        if email:
+            return SavedSearch.objects.filter(email=email, user__isnull=True)
+        return SavedSearch.objects.none()
+
+    def delete(self, request, *args, **kwargs):
+        saved_search = self.get_object()
+
+        # Soft delete by marking as inactive
+        saved_search.is_active = False
+        saved_search.save()
+
+        return Response({'message': 'Saved search deleted'}, status=status.HTTP_200_OK)

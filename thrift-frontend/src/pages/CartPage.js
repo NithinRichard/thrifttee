@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useApp } from '../contexts/AppContext';
 import CartItem from '../components/cart/CartItem';
+import EmptyState from '../components/ui/EmptyState';
 
 const CartPage = () => {
   const { state, actions } = useApp();
@@ -33,11 +34,14 @@ const CartPage = () => {
           </h1>
 
           {state.cart.length === 0 ? (
-            <div className="text-center py-12 bg-white rounded-lg shadow-lg">
-              <p className="text-xl text-gray-500 mb-6">Your cart is empty</p>
-              <Link to="/products" className="btn-primary">
-                Start Shopping
-              </Link>
+            <div className="bg-white rounded-lg shadow-lg">
+              <EmptyState
+                icon="🛒"
+                title="Your cart is empty"
+                message="Discover unique vintage finds and add them to your cart"
+                ctaText="Browse Products"
+                ctaLink="/products"
+              />
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

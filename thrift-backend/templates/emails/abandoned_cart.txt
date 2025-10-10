@@ -1,0 +1,25 @@
+Hi {{ user.first_name|default:"there" }},
+
+{% if reminder_type == '1_hour' %}
+You left {{ items|length }} unique vintage item{% if items|length > 1 %}s{% endif %} in your cart. These one-of-a-kind pieces won't last long!
+{% elif reminder_type == '24_hours' %}
+Still thinking about your vintage finds? Your cart is waiting, but these unique items might not be available for long.
+{% else %}
+This is your last reminder! The vintage items in your cart are one-of-a-kind and might sell out soon.
+{% endif %}
+
+YOUR CART:
+{% for item in items %}
+- {{ item.tshirt.title }}
+  Size: {{ item.tshirt.size }} | Qty: {{ item.quantity }} | ₹{{ item.tshirt.price }}
+{% endfor %}
+
+Total: ₹{{ total }}
+
+Complete your purchase: {{ cart_url }}
+
+Questions? Reply to this email or visit our FAQ page.
+
+---
+© 2024 Thriftee. All rights reserved.
+You're receiving this because you have items in your cart.

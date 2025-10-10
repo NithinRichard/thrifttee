@@ -1,7 +1,9 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
 from django.utils import timezone
 from apps.products.models import TShirt
+
+User = get_user_model()
 
 class Order(models.Model):
     """Order model with Rupay payment integration."""
@@ -118,3 +120,34 @@ class OrderItem(models.Model):
     @property
     def total_price(self):
         return self.quantity * self.price
+
+
+class ReturnRequest(models.Model):
+    """Return/Exchange request model."""
+    
+    RETURN_TYPES = [
+        ('return', 'Return'),
+        ('exchange', 'Exchange'),
+    ]
+    
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('approved', 'Approved'),
+        ('rejected', 'Rejected'),
+        ('completed', 'Completed'),
+    ]
+    
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='return_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    type = models.CharField(max_length=10, choices=RETURN_TYPES, default='return')
+    reason = models.CharField(max_length=255)
+    comments = models.TextField(blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f'{self.type.title()} Request for Order {self.order.order_number}'

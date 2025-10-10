@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Mobile-First CSS Framework */
+@import './styles/mobile-first.css';
+
+/* Industrial Nostalgia Theme */
+@import './styles/industrial-nostalgia.css';
+
 /* Reservation Button Styles */
 .btn-secondary {
   @apply bg-vintage-100 text-vintage-800 border-2 border-vintage-300 hover:bg-vintage-200 transition-colors duration-300 px-6 py-2 rounded-lg font-semibold;

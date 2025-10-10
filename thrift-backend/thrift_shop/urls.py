@@ -10,6 +10,7 @@ urlpatterns = [
     path('api/v1/cart/', include('apps.cart.urls')),
     path('api/v1/orders/', include('apps.orders.urls')),
     path('api/v1/shipping/', include('apps.shipping.urls')),
+    path('api/admin/', include('apps.orders.admin_urls')),
 ]
 
 # Serve media files in development

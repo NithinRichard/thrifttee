@@ -14,6 +14,12 @@ import ImageZoom from '../components/ui/ImageZoom';
 import { useRecentlyViewed } from '../hooks/useRecentlyViewed';
 import { formatINR } from '../utils/currency';
 import { DEFAULT_PRODUCT_IMAGE } from '../utils/media';
+import { normalizeSize, estimateFromMeasurements, formatSizingAdvice } from '../utils/sizing';
+import Breadcrumbs from '../components/ui/Breadcrumbs';
+import UrgencyIndicators from '../components/ui/UrgencyIndicators';
+import StickyMobileCart from '../components/product/StickyMobileCart';
+import RecommendedProducts from '../components/product/RecommendedProducts';
+import { ProductDetailSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -22,11 +28,12 @@ const ProductDetailPage = () => {
   const [relatedProducts, setRelatedProducts] = useState([]);
   const [wishlistProcessing, setWishlistProcessing] = useState(false);
   const [showExpirationNotice, setShowExpirationNotice] = useState(false);
+  const [showSizeGuide, setShowSizeGuide] = useState(false);
   const [error, setError] = useState(null);
   
   const { reservation, createReservation, extendReservation, loading, error: reservationError } = useReservation(product?.id);
   
-  useRecentlyViewed(product);
+  useRecentlyViewed(product, state.user?.id);
 
   const getConditionBadgeClass = (condition) => {
     const badgeClasses = {
@@ -95,6 +102,34 @@ const ProductDetailPage = () => {
     setProductState(product);
   }, [product]);
 
+  // Sizing normalization and measurement-based estimate
+  const normalizedSize = useMemo(() => {
+    if (!product) return null;
+    const era = Array.isArray(product?.tags) ? product.tags.join(' ') : (product?.tags || '');
+    const brandName = typeof product?.brand === 'object' && product?.brand !== null ? (product.brand.name || product.brand.title) : product?.brand;
+    return normalizeSize({
+      label: typeof product?.size === 'object' && product?.size !== null ? (product.size.name || product.size.value) : product?.size,
+      gender: product?.gender,
+      era,
+      brand: brandName,
+    });
+  }, [product]);
+
+  const measurementEstimate = useMemo(() => {
+    if (!product) return null;
+    return estimateFromMeasurements({
+      pitToPit: product?.pit_to_pit,
+      shoulderToShoulder: product?.shoulder_to_shoulder,
+      frontLength: product?.front_length,
+      sleeveLength: product?.sleeve_length,
+      gender: product?.gender,
+    });
+  }, [product]);
+
+  const sizingAdvice = useMemo(() => {
+    return formatSizingAdvice({ normalized: normalizedSize, measurementEstimate });
+  }, [normalizedSize, measurementEstimate]);
+
   const handleAddToCart = async (e) => {
     if (e) {
       e.preventDefault();
@@ -149,8 +184,8 @@ const ProductDetailPage = () => {
 
   if (state.loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="loading-spinner"></div>
+      <div className="container mx-auto px-4 py-8">
+        <ProductDetailSkeleton />
       </div>
     );
   }
@@ -179,11 +214,18 @@ const ProductDetailPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-8 pb-24 md:pb-8">
+        {/* Breadcrumbs */}
+        <Breadcrumbs items={[
+          { label: 'Products', link: '/products' },
+          { label: product.category?.name || 'Category', link: `/products?category=${product.category?.slug}` },
+          { label: product.title }
+        ]} />
+        
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ duration: 0.6 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
             {/* Product Image Gallery */}
@@ -236,10 +278,19 @@ const ProductDetailPage = () => {
                 <h1 className="text-3xl font-vintage font-bold text-gray-900 mb-4">
                   {product.title}
                 </h1>
-                <div className="text-2xl font-bold text-vintage-600 mb-4">
+                <div className="text-2xl font-bold text-vintage-600 mb-1">
                   {formatINR(product.price)}
                 </div>
-
+                {sizingAdvice && (
+                  <div className="text-sm text-gray-600 mb-4">
+                    {sizingAdvice}
+                  </div>
+                )}
+                
+                {/* Urgency Indicators */}
+                <div className="mb-4">
+                  <UrgencyIndicators product={product} />
+                </div>
               </div>
               <p className="text-gray-700 text-lg mb-8">
                 {product.description}
@@ -253,6 +304,15 @@ const ProductDetailPage = () => {
                       ? product.category.name
                       : product.category || 'N/A'}
                   </div>
+                </div>
+                <div className="bg-white p-4 rounded-lg shadow-sm">
+                  <div className="font-bold text-gray-600">Size Guide</div>
+                  <button
+                    onClick={() => setShowSizeGuide(true)}
+                    className="text-vintage-600 hover:text-vintage-700 text-sm font-medium"
+                  >
+                    View Size Chart →
+                  </button>
                 </div>
                 <div className="bg-white p-4 rounded-lg shadow-sm">
                   <div className="font-bold text-gray-600">Condition</div>
@@ -431,35 +491,149 @@ const ProductDetailPage = () => {
           </motion.div>
         )}
 
-        {/* Related Products */}
-        {relatedProducts.length > 0 && (
+        {/* Recommended Products */}
+        <RecommendedProducts currentProduct={product} />
+        
+        {/* Sticky Mobile Cart */}
+        <StickyMobileCart 
+          product={product}
+          onAddToCart={handleAddToCart}
+          loading={!isAvailable}
+        />
+
+        {/* Size Guide Modal */}
+        {showSizeGuide && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.6 }}
-            className="mt-24"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowSizeGuide(false)}
           >
-            <h2 className="text-3xl font-vintage font-bold text-gray-900 mb-8 text-center">
-              You Might Also Like
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-              {relatedProducts.map((relatedProduct) => (
-                <ProductCard key={relatedProduct.id} product={relatedProduct} />
-              ))}
-            </div>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-lg max-w-2xl w-full max-h-[80vh] overflow-y-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-2xl font-vintage font-bold text-gray-900">
+                    Size Guide
+                  </h3>
+                  <button
+                    onClick={() => setShowSizeGuide(false)}
+                    className="text-gray-400 hover:text-gray-600"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Sizing Summary using utilities */}
+                <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                    <div><span className="font-semibold">Label:</span> {(() => {
+                      if (typeof product.size === 'object' && product.size !== null) {
+                        return product.size.name || product.size.value || 'N/A';
+                      }
+                      return product.size || 'N/A';
+                    })()}</div>
+                    <div><span className="font-semibold">Standardized:</span> {normalizedSize?.us || 'Unknown'}</div>
+                    <div><span className="font-semibold">Suggested fit:</span> {normalizedSize?.suggested || '—'}</div>
+                    {measurementEstimate && (
+                      <div><span className="font-semibold">Estimate from measurements:</span> {measurementEstimate}</div>
+                    )}
+                  </div>
+                  {(product.pit_to_pit || product.front_length || product.shoulder_to_shoulder) && (
+                    <div className="mt-3 text-xs text-gray-600">
+                      {product.pit_to_pit && (<div>Pit-to-pit: {product.pit_to_pit}"</div>)}
+                      {product.front_length && (<div>Length: {product.front_length}"</div>)}
+                      {product.shoulder_to_shoulder && (<div>Shoulder: {product.shoulder_to_shoulder}"</div>)}
+                    </div>
+                  )}
+                  {normalizedSize?.notes?.length > 0 && (
+                    <div className="mt-2 text-xs text-gray-500">{normalizedSize.notes.join(' ')}</div>
+                  )}
+                </div>
+
+                {/* Size Chart Table */}
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse border border-gray-200">
+                    <thead>
+                      <tr className="bg-gray-50">
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Size</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Chest (inches)</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Length (inches)</th>
+                        <th className="border border-gray-200 px-4 py-3 text-left font-semibold">Shoulder (inches)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border border-gray-200 px-4 py-3 font-medium">XS</td>
+                        <td className="border border-gray-200 px-4 py-3">34-36</td>
+                        <td className="border border-gray-200 px-4 py-3">25-26</td>
+                        <td className="border border-gray-200 px-4 py-3">16-17</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="border border-gray-200 px-4 py-3 font-medium">S</td>
+                        <td className="border border-gray-200 px-4 py-3">36-38</td>
+                        <td className="border border-gray-200 px-4 py-3">26-27</td>
+                        <td className="border border-gray-200 px-4 py-3">17-18</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-200 px-4 py-3 font-medium">M</td>
+                        <td className="border border-gray-200 px-4 py-3">38-40</td>
+                        <td className="border border-gray-200 px-4 py-3">27-28</td>
+                        <td className="border border-gray-200 px-4 py-3">18-19</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="border border-gray-200 px-4 py-3 font-medium">L</td>
+                        <td className="border border-gray-200 px-4 py-3">40-42</td>
+                        <td className="border border-gray-200 px-4 py-3">28-29</td>
+                        <td className="border border-gray-200 px-4 py-3">19-20</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-200 px-4 py-3 font-medium">XL</td>
+                        <td className="border border-gray-200 px-4 py-3">42-44</td>
+                        <td className="border border-gray-200 px-4 py-3">29-30</td>
+                        <td className="border border-gray-200 px-4 py-3">20-21</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td className="border border-gray-200 px-4 py-3 font-medium">XXL</td>
+                        <td className="border border-gray-200 px-4 py-3">44-46</td>
+                        <td className="border border-gray-200 px-4 py-3">30-31</td>
+                        <td className="border border-gray-200 px-4 py-3">21-22</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                  <h4 className="font-semibold text-blue-900 mb-2">How to Measure</h4>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• <strong>Chest:</strong> Measure around the fullest part of your chest</li>
+                    <li>• <strong>Length:</strong> Measure from the highest point of the shoulder to the bottom hem</li>
+                    <li>• <strong>Shoulder:</strong> Measure from one shoulder seam to the other</li>
+                  </ul>
+                </div>
+
+                <div className="mt-6 text-center">
+                  <p className="text-sm text-gray-600">
+                    Still unsure about sizing? <a href="/contact" className="text-vintage-600 hover:text-vintage-700 font-medium">Contact our styling experts</a>
+                  </p>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
         )}
-        
-        {/* Expiration Notice Modal */}
-        {showExpirationNotice && (
-          <VintageExpirationNotice
-            productName={product.title}
-            onClose={() => setShowExpirationNotice(false)}
-          />
-        )}
+
       </div>
     </div>
   );
 };
 
 export default ProductDetailPage;
+
