@@ -97,8 +97,10 @@ const VintageShippingSelector = ({
     setSelectedMethod(method);
     onShippingSelect?.(method);
 
-    const cost = shippingCosts[method.id] || 50;
-    onShippingCostUpdate?.(cost);
+    const cost = shippingCosts[method.id];
+    if (cost !== undefined) {
+      onShippingCostUpdate?.(cost);
+    }
   };
 
   const getMethodIcon = (methodName) => {
