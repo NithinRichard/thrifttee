@@ -19,6 +19,7 @@ import Breadcrumbs from '../components/ui/Breadcrumbs';
 import UrgencyIndicators from '../components/ui/UrgencyIndicators';
 import StickyMobileCart from '../components/product/StickyMobileCart';
 import RecommendedProducts from '../components/product/RecommendedProducts';
+import SocialShare from '../components/common/SocialShare';
 import { ProductDetailSkeleton } from '../components/ui/LoadingSkeleton';
 
 const ProductDetailPage = () => {
@@ -278,8 +279,15 @@ const ProductDetailPage = () => {
                 <h1 className="text-3xl font-vintage font-bold text-gray-900 mb-4">
                   {product.title}
                 </h1>
-                <div className="text-2xl font-bold text-vintage-600 mb-1">
-                  {formatINR(product.price)}
+                <div className="flex items-center justify-between mb-4">
+                  <div className="text-2xl font-bold text-vintage-600">
+                    {formatINR(product.price)}
+                  </div>
+                  <SocialShare
+                    url={window.location.href}
+                    title={product.title}
+                    image={product.primary_image || product.all_images?.[0]}
+                  />
                 </div>
                 {sizingAdvice && (
                   <div className="text-sm text-gray-600 mb-4">

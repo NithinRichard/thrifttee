@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.response import Response
@@ -9,6 +10,7 @@ from .models import Cart, CartItem
 from .serializers import CartSerializer
 from apps.products.models import ProductReservation, TShirt
 from apps.products.utils import get_available_quantity
+from apps.common.validators import validate_quantity as validate_qty
 from django.contrib.auth.models import User
 from django.utils import timezone
 from datetime import timedelta
@@ -16,13 +18,9 @@ from datetime import timedelta
 
 def _parse_quantity(value):
     try:
-        quantity = int(value)
-    except (TypeError, ValueError):
+        return validate_qty(value)
+    except ValidationError:
         return None
-
-    if quantity < 1:
-        return None
-    return quantity
 
 
 def _get_or_create_cart_for_request(request):
@@ -121,13 +119,18 @@ class AddToCartView(APIView):
     def post(self, request):
         product_id = request.data.get('product_id')
         quantity_value = request.data.get('quantity', 1)
+        
+        # Validate product_id
+        try:
+            product_id = int(product_id)
+            if product_id < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            return Response({'error': 'Invalid product ID.'}, status=status.HTTP_400_BAD_REQUEST)
 
         quantity = _parse_quantity(quantity_value)
         if quantity is None:
-            return Response({'error': 'Quantity must be a positive integer.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if not product_id:
-            return Response({'error': 'Product ID is required.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'Quantity must be between 1 and 100.'}, status=status.HTTP_400_BAD_REQUEST)
 
         product = get_object_or_404(TShirt.objects.select_for_update(), id=product_id, is_available=True)
 

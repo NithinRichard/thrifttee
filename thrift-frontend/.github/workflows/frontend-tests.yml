@@ -1,0 +1,48 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18'
+        cache: 'npm'
+        cache-dependency-path: thrift-frontend/package-lock.json
+    
+    - name: Install dependencies
+      working-directory: ./thrift-frontend
+      run: npm ci
+    
+    - name: Run unit tests
+      working-directory: ./thrift-frontend
+      run: npm run test:ci
+    
+    - name: Upload coverage
+      uses: codecov/codecov-action@v3
+      with:
+        files: ./thrift-frontend/coverage/lcov.info
+        flags: frontend
+    
+    - name: Run E2E tests
+      working-directory: ./thrift-frontend
+      run: npx cypress run
+      env:
+        CYPRESS_baseUrl: http://localhost:3000
+    
+    - name: Upload Cypress screenshots
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: cypress-screenshots
+        path: thrift-frontend/cypress/screenshots

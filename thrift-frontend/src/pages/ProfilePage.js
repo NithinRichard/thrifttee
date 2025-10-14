@@ -95,7 +95,9 @@ const ProfilePage = () => {
                     <div key={order.id} className="border border-gray-200 p-6 rounded-lg">
                       <div className="flex justify-between items-center mb-4">
                         <div>
-                          <div className="font-bold text-gray-800">Order #{order.order_number || order.id}</div>
+                          <Link to={`/orders/${order.order_number}`} className="font-bold text-vintage-600 hover:text-vintage-700">
+                            Order #{order.order_number || order.id}
+                          </Link>
                           <div className="text-sm text-gray-500">
                             <span title={new Date(order.created_at).toLocaleString('en-IN', {
                               weekday: 'long',
@@ -138,6 +140,9 @@ const ProfilePage = () => {
                               </span>
                             )}
                           </div>
+                          <Link to={`/orders/${order.order_number}`} className="text-sm text-vintage-600 hover:underline mt-2 inline-block">
+                            Track Order →
+                          </Link>
                         </div>
                         <div className="text-right">
                           <div className="font-bold text-lg text-vintage-600">

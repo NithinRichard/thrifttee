@@ -13,6 +13,7 @@ from .serializers import (
     CategorySerializer, TShirtReviewSerializer
 )
 from .filters import TShirtFilter
+from apps.common.validators import sanitize_search_query, sanitize_html, validate_quantity
 
 class TShirtListView(generics.ListAPIView):
     """List view for T-Shirts with filtering and search."""
@@ -60,7 +61,7 @@ class TShirtReviewListCreateView(generics.ListCreateAPIView):
 @api_view(['GET'])
 def search_suggestions(request):
     """API endpoint for search suggestions."""
-    query = request.GET.get('q', '').strip()
+    query = sanitize_search_query(request.GET.get('q', ''))
     
     if len(query) < 2:
         return Response({'suggestions': []})
@@ -384,8 +385,8 @@ def submit_review(request, product_id):
         return Response({'error': 'You have already reviewed this product'}, status=status.HTTP_400_BAD_REQUEST)
     
     rating = request.data.get('rating')
-    title = request.data.get('title', '').strip()
-    comment = request.data.get('comment', '').strip()
+    title = sanitize_html(request.data.get('title', ''))
+    comment = sanitize_html(request.data.get('comment', ''))
     
     if not rating or not title or not comment:
         return Response({'error': 'Rating, title, and comment are required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -428,7 +429,7 @@ from .utils import get_available_quantity, can_reserve_quantity
 def create_reservation(request, product_id):
     try:
         product = TShirt.objects.get(id=product_id, is_available=True)
-        quantity = request.data.get('quantity', 1)
+        quantity = validate_quantity(request.data.get('quantity', 1))
         
         # Validate quantity
         if quantity < 1:

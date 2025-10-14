@@ -5,6 +5,7 @@ import { submitSavedSearchToBackend } from '../utils/savedSearches';
 import ProductCard from '../components/product/ProductCard';
 import ProductFilters from '../components/product/ProductFilters';
 import SearchBar from '../components/common/SearchBar';
+import AdvancedSearch from '../components/search/AdvancedSearch';
 import apiService from '../services/api';
 import { ProductGridSkeleton, FiltersSkeleton } from '../components/ui/SkeletonLoading';
 import EmptyState from '../components/ui/EmptyState';
@@ -14,6 +15,7 @@ const ProductsPage = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [sortBy, setSortBy] = useState('-created_at');
+  const [showAdvancedSearch, setShowAdvancedSearch] = useState(false);
   const debounceRef = useRef(null);
 
   // Memoize the debounced load function to prevent unnecessary re-renders
@@ -158,6 +160,12 @@ const ProductsPage = () => {
             {/* Search Bar */}
             <div className="max-w-md mx-auto">
               <SearchBar />
+              <button
+                onClick={() => setShowAdvancedSearch(true)}
+                className="mt-2 text-sm text-vintage-600 hover:text-vintage-700 underline"
+              >
+                Advanced Search
+              </button>
             </div>
           </motion.div>
         </div>
@@ -391,6 +399,17 @@ const ProductsPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Advanced Search Modal */}
+      {showAdvancedSearch && (
+        <AdvancedSearch
+          onSearch={(filters) => {
+            actions.setFilters(filters);
+            if (filters.search) actions.setSearchQuery(filters.search);
+          }}
+          onClose={() => setShowAdvancedSearch(false)}
+        />
+      )}
     </div>
   );
 };
