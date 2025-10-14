@@ -88,7 +88,9 @@ const OrderTrackingPage = () => {
             <div key={item.id} className="flex items-center gap-4 border-b py-4">
               <div className="flex-1">
                 <p className="font-medium">{item.product_title}</p>
-                <p className="text-sm text-gray-600">{item.product_brand} • Size: {item.product_size}</p>
+                <p className="text-sm text-gray-600">
+                  {typeof item.product_brand === 'string' ? item.product_brand : item.product_brand?.name || 'Brand'} • Size: {item.product_size?.toUpperCase()}
+                </p>
                 <p className="text-sm text-gray-600">Qty: {item.quantity}</p>
               </div>
               <p className="font-semibold">₹{item.price}</p>

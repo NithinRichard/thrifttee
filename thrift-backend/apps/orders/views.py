@@ -26,6 +26,7 @@ from apps.cart.models import Cart
 from .models import Order, OrderItem
 from apps.products.utils import reduce_inventory_for_order
 from .inventory import InventoryManager
+from apps.common.validators import validate_email, validate_phone, validate_pincode, sanitize_html
 
 class OrderViewSet(viewsets.ModelViewSet):
     """Order viewset with Razorpay payment integration."""
@@ -700,25 +701,29 @@ def create_guest_order(request):
     """
     try:
         data = request.data or {}
-        email = (data.get('email') or '').strip()
+        email = validate_email((data.get('email') or '').strip())
         shipping = data.get('shipping_address') or {}
         items = data.get('items') or data.get('order_items') or []
 
         if not email:
-            return Response({'success': False, 'message': 'Email is required'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'success': False, 'message': 'Valid email is required'}, status=status.HTTP_400_BAD_REQUEST)
 
         # Ensure we have at least one item
         if not items:
             return Response({'success': False, 'message': 'No items provided for order'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Validate shipping info
+        phone = validate_phone(shipping.get('phone', ''))
+        postal_code = validate_pincode(shipping.get('postal_code', ''))
+        
         # Create or get a pseudo-user for guest by email
         first_name = ''
         last_name = ''
-        full_name = (shipping.get('name') or '').strip()
+        full_name = sanitize_html((shipping.get('name') or '').strip())
         if full_name:
             parts = full_name.split()
-            first_name = parts[0]
-            last_name = ' '.join(parts[1:]) if len(parts) > 1 else ''
+            first_name = sanitize_html(parts[0])
+            last_name = sanitize_html(' '.join(parts[1:])) if len(parts) > 1 else ''
 
         user = User.objects.filter(email=email).first()
         if not user:
@@ -816,11 +821,11 @@ def create_guest_order(request):
                 total_amount=total_amount,
                 shipping_name=full_name or user.get_full_name() or user.username,
                 shipping_email=email,
-                shipping_phone=str(shipping.get('phone') or ''),
-                shipping_address_line1=str(shipping.get('address') or ''),
-                shipping_city=str(shipping.get('city') or ''),
-                shipping_state=str(shipping.get('state') or ''),
-                shipping_postal_code=str(shipping.get('postal_code') or ''),
+                shipping_phone=phone,
+                shipping_address_line1=sanitize_html(str(shipping.get('address') or '')),
+                shipping_city=sanitize_html(str(shipping.get('city') or '')),
+                shipping_state=sanitize_html(str(shipping.get('state') or '')),
+                shipping_postal_code=postal_code,
                 shipping_country='India',
                 payment_method='razorpay',
                 currency='INR'
@@ -867,9 +872,9 @@ def create_return_request(request):
     return_request = ReturnRequest.objects.create(
         order=order,
         user=request.user,
-        reason=data.get('reason'),
+        reason=sanitize_html(data.get('reason', '')),
         type=data.get('type', 'return'),
-        comments=data.get('comments', '')
+        comments=sanitize_html(data.get('comments', ''))
     )
     
     send_mail(

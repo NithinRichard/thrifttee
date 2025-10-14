@@ -5,8 +5,10 @@ from rest_framework.response import Response
 from rest_framework.authtoken.models import Token
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.core.exceptions import ValidationError
 from .models import UserProfile, Wishlist, SavedSearch
 from .serializers import UserSerializer, UserProfileSerializer, WishlistSerializer, SavedSearchSerializer
+from apps.common.validators import sanitize_html, validate_email
 
 class RegisterView(generics.CreateAPIView):
     """User registration view."""
@@ -16,13 +18,29 @@ class RegisterView(generics.CreateAPIView):
     
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
+        
+        # Validate and sanitize email
+        try:
+            if data.get('email'):
+                data['email'] = validate_email(data['email'])
+        except ValidationError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Sanitize text inputs
+        if data.get('full_name'):
+            data['full_name'] = sanitize_html(data['full_name'])
+        if data.get('first_name'):
+            data['first_name'] = sanitize_html(data['first_name'])
+        if data.get('last_name'):
+            data['last_name'] = sanitize_html(data['last_name'])
+        
         # Map frontend fields to Django User fields
         if not data.get('username'):
-            # Use email as username fallback
             if data.get('email'):
                 data['username'] = data['email']
             elif data.get('full_name'):
                 data['username'] = data['full_name']
+        
         # Populate first_name/last_name from full_name when provided
         full_name = data.get('full_name')
         if full_name and not (data.get('first_name') or data.get('last_name')):
@@ -53,11 +71,18 @@ class LoginView(generics.GenericAPIView):
     def post(self, request):
         username = request.data.get('username')
         password = request.data.get('password')
+        
+        # Sanitize username
+        if username:
+            username = sanitize_html(username)
 
         # Attempt email-based login if username not provided
         user = None
         if not username and request.data.get('email') and password:
-            email = request.data.get('email')
+            try:
+                email = validate_email(request.data.get('email'))
+            except ValidationError:
+                return Response({'error': 'Invalid email format'}, status=status.HTTP_400_BAD_REQUEST)
             # Emails may not be unique; try all matching users in a deterministic order
             qs = User.objects.filter(email=email).order_by('-date_joined', '-id')
             for candidate in qs:
@@ -169,9 +194,15 @@ class CreateSavedSearchView(generics.CreateAPIView):
     permission_classes = [AllowAny]  # Allow guest users to create saved searches
 
     def create(self, request, *args, **kwargs):
-        # Check for existing active saved search with same criteria
+        # Validate and sanitize inputs
         email = request.data.get('email')
-        query = request.data.get('query', '')
+        if email:
+            try:
+                email = validate_email(email)
+            except ValidationError as e:
+                return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        query = sanitize_html(request.data.get('query', ''))
         filters = request.data.get('filters', {})
 
         if email:

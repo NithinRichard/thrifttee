@@ -3,6 +3,7 @@ import apiService from '../services/api';
 import { validateQuantity } from '../utils/validation';
 import { syncSavedSearchesOnLogin } from '../utils/savedSearches';
 import { useToast } from './ToastContext';
+import { trackAddToCart, trackProductView } from '../utils/analytics';
 
 // Initial state
 const initialState = {
@@ -588,6 +589,9 @@ export const AppProvider = ({ children, openCartDrawer }) => {
       toast.showError('Invalid product. Please try again.');
       return;
     }
+
+    // Track add to cart event
+    trackAddToCart(item, validQuantity);
 
     // For guest users, use local storage cart
     if (!state.isAuthenticated) {

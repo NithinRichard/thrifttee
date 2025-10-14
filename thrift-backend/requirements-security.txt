@@ -1,0 +1,25 @@
+# Security & Environment
+python-dotenv==1.0.0
+
+# Password Hashing
+argon2-cffi==23.1.0
+
+# Input Validation
+bleach==6.1.0
+html5lib==1.1
+
+# Rate Limiting
+django-ratelimit==4.1.0
+
+# Security Headers
+django-csp==3.8
+
+# HTTPS/SSL
+django-sslserver==0.22
+
+# Monitoring
+sentry-sdk==1.39.1
+
+# Redis (for caching & sessions)
+redis==5.0.1
+django-redis==5.4.0

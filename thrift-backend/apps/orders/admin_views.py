@@ -11,6 +11,9 @@ from apps.products.models import TShirt
 from apps.products.serializers import TShirtListSerializer, TShirtDetailSerializer
 from django.utils.text import slugify
 from .refunds import refund_manager
+from .analytics import OrderAnalytics
+import csv
+from django.http import HttpResponse
 
 class AdminOrderViewSet(viewsets.ModelViewSet):
     """Admin-only order management."""
@@ -38,30 +41,58 @@ class AdminOrderViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['get'])
     def analytics(self, request):
-        """Get order analytics."""
-        today = timezone.now().date()
-        last_30_days = today - timedelta(days=30)
+        """Get comprehensive analytics."""
+        days = int(request.query_params.get('days', 30))
         
-        total_orders = Order.objects.count()
-        total_revenue = Order.objects.filter(
-            payment_status='completed'
-        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-        
-        pending_orders = Order.objects.filter(status='pending').count()
-        completed_orders = Order.objects.filter(status='delivered').count()
-        
-        recent_revenue = Order.objects.filter(
-            payment_status='completed',
-            created_at__gte=last_30_days
-        ).aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        stats = OrderAnalytics.get_dashboard_stats(days)
+        revenue_chart = OrderAnalytics.get_revenue_chart(days)
+        top_products = OrderAnalytics.get_top_products()
+        status_dist = OrderAnalytics.get_order_status_distribution()
         
         return Response({
-            'total_orders': total_orders,
-            'total_revenue': float(total_revenue),
-            'pending_orders': pending_orders,
-            'completed_orders': completed_orders,
-            'last_30_days_revenue': float(recent_revenue)
+            'stats': stats,
+            'revenue_chart': revenue_chart,
+            'top_products': top_products,
+            'status_distribution': status_dist
         })
+    
+    @action(detail=False, methods=['post'])
+    def bulk_update_status(self, request):
+        """Bulk update order status."""
+        order_ids = request.data.get('order_ids', [])
+        new_status = request.data.get('status')
+        
+        if not order_ids or not new_status:
+            return Response({'error': 'order_ids and status required'}, status=400)
+        
+        if new_status not in dict(Order.STATUS_CHOICES):
+            return Response({'error': 'Invalid status'}, status=400)
+        
+        updated = Order.objects.filter(id__in=order_ids).update(status=new_status)
+        return Response({'updated': updated})
+    
+    @action(detail=False, methods=['get'])
+    def export_csv(self, request):
+        """Export orders to CSV."""
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="orders.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Order Number', 'Customer', 'Email', 'Total', 'Status', 'Payment Status', 'Date'])
+        
+        orders = self.get_queryset()
+        for order in orders:
+            writer.writerow([
+                order.order_number,
+                order.shipping_name,
+                order.shipping_email,
+                order.total_amount,
+                order.status,
+                order.payment_status,
+                order.created_at.strftime('%Y-%m-%d %H:%M')
+            ])
+        
+        return response
 
 class AdminProductViewSet(viewsets.ModelViewSet):
     """Admin-only product management."""
